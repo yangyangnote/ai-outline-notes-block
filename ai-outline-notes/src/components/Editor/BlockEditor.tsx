@@ -92,8 +92,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   onFocusNext,
   onToggleCollapse,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [content, setContent] = useState(block.content);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     setContent(block.content);
@@ -112,6 +114,30 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
     }
   }, [content]);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isMenuOpen]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Tab: 缩进
@@ -225,9 +251,22 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     onSelect(block.id);
   };
 
+  const handleMenuToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsMenuOpen(prev => !prev);
+  };
+
+  const handleDeleteConfirm = () => {
+    setIsMenuOpen(false);
+    onDelete(block.id);
+    onFocusPrevious(block.id);
+  };
+
   return (
-    <div 
-      className={`block-item flex items-start group ${isSelected ? 'bg-blue-50' : ''}`}
+    <div
+      ref={containerRef}
+      className={`block-item flex items-start group rounded-md transition-colors duration-200 hover:bg-[var(--color-block-hover-bg)] ${isSelected ? 'bg-[var(--color-block-selected-bg)]' : ''}`}
       style={{ paddingLeft: `${level * 24}px` }}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
@@ -241,13 +280,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         {hasChildren ? (
           <button
             onClick={() => onToggleCollapse(block.id)}
-            className="w-5 h-5 flex items-center justify-center hover:bg-gray-200 rounded transition-colors"
+            className="w-5 h-5 flex items-center justify-center hover:bg-[var(--color-block-hover-bg)] rounded transition-colors duration-200"
             title={block.collapsed ? '展开' : '折叠'}
           >
             {block.collapsed ? (
-              <ChevronRight className="w-4 h-4 text-gray-600" />
+              <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)]" />
             ) : (
-              <ChevronDown className="w-4 h-4 text-gray-600" />
+              <ChevronDown className="w-4 h-4 text-[var(--color-text-muted)]" />
             )}
           </button>
         ) : (
@@ -256,15 +295,35 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       </div>
 
       {/* 块拖拽手柄 */}
-      <div className="flex-shrink-0 mr-2 pt-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
-        <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 16 16">
-          <circle cx="4" cy="4" r="1.5"/>
-          <circle cx="12" cy="4" r="1.5"/>
-          <circle cx="4" cy="8" r="1.5"/>
-          <circle cx="12" cy="8" r="1.5"/>
-          <circle cx="4" cy="12" r="1.5"/>
-          <circle cx="12" cy="12" r="1.5"/>
-        </svg>
+      <div className="relative flex-shrink-0 mr-2 pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          type="button"
+          onContextMenu={handleMenuToggle}
+          className="cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors duration-200"
+          title="更多操作"
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+            <circle cx="4" cy="4" r="1.5"/>
+            <circle cx="12" cy="4" r="1.5"/>
+            <circle cx="4" cy="8" r="1.5"/>
+            <circle cx="12" cy="8" r="1.5"/>
+            <circle cx="4" cy="12" r="1.5"/>
+            <circle cx="12" cy="12" r="1.5"/>
+          </svg>
+        </button>
+        {isMenuOpen && (
+          <div className="absolute left-6 top-0 z-20 w-48 rounded-md border border-[var(--color-popover-border)] bg-[var(--color-popover-bg)] py-2 shadow-lg transition-colors duration-200">
+            <div className="px-3 pb-1 text-xs font-medium text-[var(--color-text-secondary)]">块操作</div>
+            <button
+              type="button"
+              onClick={handleDeleteConfirm}
+              className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] transition-colors duration-200 rounded-md"
+            >
+              <span>删除选定块</span>
+              <span className="text-xs text-[var(--color-text-muted)]">Delete</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 块内容编辑器 */}
@@ -273,7 +332,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <button
             type="button"
             onClick={() => onSelect(block.id)}
-            className="w-full cursor-pointer rounded py-2 px-2 transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full cursor-pointer rounded py-2 px-2 transition-colors hover:bg-[var(--color-block-hover-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
             title="点击查看图片地址"
             onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
@@ -285,7 +344,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             <img
               src={parsedImage?.url}
               alt={parsedImage?.alt}
-              className="max-h-80 max-w-full rounded border border-gray-200 object-contain"
+              className="max-h-80 max-w-full rounded border border-[var(--color-border-subtle)] object-contain"
             />
           </button>
         ) : (
@@ -303,8 +362,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             onDrop={handleDrop}
             onDropCapture={handleDrop}
             className="w-full resize-none border-none outline-none bg-transparent py-2 px-2 rounded
-                       focus:ring-2 focus:ring-blue-500 focus:bg-white
-                       text-gray-900 placeholder-gray-400"
+                       focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-[var(--color-editor-bg)]
+                       text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] selection:bg-[var(--color-accent-soft)]"
             rows={1}
           />
         )}

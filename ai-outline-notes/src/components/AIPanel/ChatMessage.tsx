@@ -18,7 +18,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   return (
     <div className={`flex gap-3 mb-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
       {!isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center text-white shadow-sm">
           <Bot className="w-5 h-5 text-white" />
         </div>
       )}
@@ -27,8 +27,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         <div
           className={`px-4 py-2 rounded-lg ${
             isUser
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-100 text-gray-900'
+              ? 'bg-[var(--color-accent)] text-white'
+              : 'bg-[var(--color-button-bg)] text-[var(--color-text-primary)]'
           }`}
         >
           <div className="whitespace-pre-wrap break-words">{content}</div>
@@ -37,7 +37,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         {!isUser && onInsert && (
           <button
             onClick={onInsert}
-            className="mt-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+            className="mt-1 text-xs text-[var(--color-accent)] hover:underline"
           >
             插入到笔记
           </button>
@@ -45,11 +45,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       </div>
 
       {isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center">
-          <User className="w-5 h-5 text-white" />
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--color-button-bg)] flex items-center justify-center text-[var(--color-text-primary)]">
+          <User className="w-5 h-5" />
         </div>
       )}
     </div>
   );
 };
-

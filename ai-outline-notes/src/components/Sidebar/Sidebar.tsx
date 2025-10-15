@@ -41,30 +41,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <div className="w-64 h-full bg-gray-50 border-r border-gray-200 flex flex-col">
+    <div className="w-64 h-full bg-[var(--color-sidebar-bg)] border-r border-[var(--color-border-strong)] flex flex-col transition-colors duration-200">
       {/* 头部 */}
-      <div className="p-4 border-b border-gray-200">
-        <h1 className="text-xl font-bold text-gray-900 mb-4">AI 大纲笔记</h1>
+      <div className="p-4 border-b border-[var(--color-border-strong)]">
+        <h1 className="text-xl font-bold text-[var(--color-text-primary)] mb-4">AI 大纲笔记</h1>
 
         {/* 搜索框 */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="搜索页面..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm"
+            className="w-full pl-9 pr-3 py-2 border border-[var(--color-input-border)] rounded-md text-sm bg-[var(--color-input-bg)] text-[var(--color-text-primary)] placeholder:text-[var(--color-input-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-soft)] transition-colors duration-200"
           />
         </div>
       </div>
 
       {/* 快捷操作 */}
-      <div className="p-2 border-b border-gray-200 space-y-1">
+      <div className="p-2 border-b border-[var(--color-border-strong)] space-y-1">
         <button
           onClick={handleOpenToday}
-          className="w-full flex items-center gap-2 px-3 py-2 text-left text-gray-700 
-                   hover:bg-gray-200 rounded-md transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-2 text-left text-[var(--color-text-primary)] 
+                   hover:bg-[var(--color-sidebar-hover)] rounded-md transition-colors duration-200"
         >
           <Calendar className="w-4 h-4" />
           <span className="text-sm">今日日记</span>
@@ -72,8 +72,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <button
           onClick={handleCreatePage}
-          className="w-full flex items-center gap-2 px-3 py-2 text-left text-gray-700 
-                   hover:bg-gray-200 rounded-md transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-2 text-left text-[var(--color-text-primary)] 
+                   hover:bg-[var(--color-sidebar-hover)] rounded-md transition-colors duration-200"
         >
           <Plus className="w-4 h-4" />
           <span className="text-sm">新建页面</span>
@@ -83,7 +83,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* 页面列表 */}
       <div className="flex-1 overflow-y-auto p-2">
         {filteredPages?.length === 0 ? (
-          <div className="text-center text-gray-500 text-sm mt-4">
+          <div className="text-center text-[var(--color-text-muted)] text-sm mt-4">
             {searchQuery ? '没有找到匹配的页面' : '还没有页面'}
           </div>
         ) : (
@@ -92,10 +92,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               key={page.id}
               onClick={() => onPageSelect(page.id)}
               className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-md 
-                       transition-colors mb-1 group ${
+                       transition-colors duration-200 mb-1 group ${
                 currentPageId === page.id
-                  ? 'bg-blue-100 text-blue-900'
-                  : 'text-gray-700 hover:bg-gray-200'
+                  ? 'bg-[var(--color-list-active-bg)] text-[var(--color-list-active-text)]'
+                  : 'text-[var(--color-text-primary)] hover:bg-[var(--color-sidebar-hover)]'
               }`}
             >
               {page.type === 'daily' ? (
@@ -110,10 +110,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* 底部信息 */}
-      <div className="p-4 border-t border-gray-200 text-xs text-gray-500">
+      <div className="p-4 border-t border-[var(--color-border-strong)] text-xs text-[var(--color-text-muted)]">
         <p>共 {pages?.length || 0} 个页面</p>
       </div>
     </div>
   );
 };
-

@@ -1,6 +1,6 @@
 // 主应用组件
 import React, { useEffect, useState } from 'react';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, Sun, Moon } from 'lucide-react';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { OutlineEditor } from './components/Editor/OutlineEditor';
 import { AIPanel } from './components/AIPanel/AIPanel';
@@ -15,6 +15,30 @@ function App() {
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
   const [selectedBlockContent, setSelectedBlockContent] = useState<string>('');
   const [isInitialized, setIsInitialized] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') {
+      return 'light';
+    }
+    const stored = localStorage.getItem('things-theme');
+    const resolved =
+      stored === 'light' || stored === 'dark'
+        ? stored
+        : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light';
+    const root = document.documentElement;
+    root.classList.remove('theme-things-light', 'theme-things-dark');
+    root.classList.add(resolved === 'dark' ? 'theme-things-dark' : 'theme-things-light');
+    return resolved;
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove('theme-things-light', 'theme-things-dark');
+    const themeClass = theme === 'dark' ? 'theme-things-dark' : 'theme-things-light';
+    root.classList.add(themeClass);
+    localStorage.setItem('things-theme', theme);
+  }, [theme]);
 
   // 初始化数据库
   useEffect(() => {
@@ -61,16 +85,20 @@ function App() {
     setSelectedBlockContent(content);
   };
 
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  };
+
   if (!isInitialized) {
     return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="text-gray-600">初始化中...</div>
+      <div className="h-screen flex items-center justify-center bg-[var(--color-app-bg)] transition-colors">
+        <div className="text-[var(--color-text-secondary)]">初始化中...</div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-100">
+    <div className="h-screen flex overflow-hidden bg-[var(--color-app-bg)] text-[var(--color-text-primary)] transition-colors duration-200">
       {/* 左侧边栏 */}
       <Sidebar
         currentPageId={currentPageId}
@@ -80,29 +108,48 @@ function App() {
       {/* 主编辑区 */}
       <div className="flex-1 flex flex-col">
         {/* 顶部工具栏 */}
-        <div className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6">
+        <div className="h-14 bg-[var(--color-toolbar-bg)] border-b border-[var(--color-border-subtle)] flex items-center justify-between px-6 transition-colors duration-200">
           <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
               {currentPage?.title || '选择一个页面'}
             </h2>
             {currentPage && (
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-[var(--color-text-secondary)]">
                 {currentPage.type === 'daily' ? '日记' : '笔记'}
               </span>
             )}
           </div>
 
-          <button
-            onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
-              isAIPanelOpen
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <MessageSquare className="w-5 h-5" />
-            <span>AI 助手</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-2 px-3 py-2 rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-button-bg)] text-[var(--color-button-text)] hover:bg-[var(--color-button-hover)] transition-colors duration-200"
+            >
+              {theme === 'dark' ? (
+                <>
+                  <Sun className="w-4 h-4" />
+                  <span className="text-sm">浅色模式</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-4 h-4" />
+                  <span className="text-sm">深色模式</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors duration-200 ${
+                isAIPanelOpen
+                  ? 'bg-[var(--color-accent)] text-white'
+                  : 'bg-[var(--color-ai-button-inactive-bg)] text-[var(--color-ai-button-inactive-text)] hover:bg-[var(--color-button-hover)]'
+              }`}
+            >
+              <MessageSquare className="w-5 h-5" />
+              <span>AI 助手</span>
+            </button>
+          </div>
         </div>
 
         {/* 编辑器 */}
@@ -113,7 +160,7 @@ function App() {
               onBlockSelect={handleBlockSelect}
             />
           ) : (
-            <div className="h-full flex items-center justify-center text-gray-500">
+            <div className="h-full flex items-center justify-center text-[var(--color-text-secondary)]">
               请选择或创建一个页面开始编辑
             </div>
           )}

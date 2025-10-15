@@ -183,14 +183,14 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
   };
 
   return (
-    <div className="outline-editor h-full overflow-y-auto p-4 bg-white">
+    <div className="outline-editor h-full overflow-y-auto p-4 bg-[var(--color-editor-bg)] transition-colors duration-200">
       <div className="max-w-4xl mx-auto">
         {flatTree.length === 0 ? (
-          <div className="py-12 text-center text-gray-500">
+          <div className="py-12 text-center text-[var(--color-text-muted)]">
             <p className="mb-4">还没有内容，点击下方按钮开始记录。</p>
             <button
               onClick={handleCreateFirstBlock}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+              className="px-4 py-2 bg-[var(--color-accent)] text-white rounded-md hover:opacity-90 transition-opacity"
             >
               创建第一条笔记
             </button>

@@ -151,32 +151,32 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed right-0 top-0 h-full w-96 bg-white border-l border-gray-200 flex flex-col shadow-lg z-50">
+    <div className="fixed right-0 top-0 h-full w-96 bg-[var(--color-editor-bg)] border-l border-[var(--color-border-strong)] flex flex-col shadow-lg z-50 transition-colors duration-200">
       {/* 头部 */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">AI 助手</h2>
+      <div className="flex items-center justify-between p-4 border-b border-[var(--color-border-strong)]">
+        <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">AI 助手</h2>
         <div className="flex gap-2">
           <button
             onClick={() => setShowSettings(!showSettings)}
-            className="p-2 hover:bg-gray-100 rounded"
+            className="p-2 rounded transition-colors duration-200 hover:bg-[var(--color-block-hover-bg)]"
             title="设置"
           >
-            <Settings className="w-5 h-5 text-gray-600" />
+            <Settings className="w-5 h-5 text-[var(--color-text-secondary)]" />
           </button>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded"
+            className="p-2 rounded transition-colors duration-200 hover:bg-[var(--color-block-hover-bg)]"
             title="关闭"
           >
-            <X className="w-5 h-5 text-gray-600" />
+            <X className="w-5 h-5 text-[var(--color-text-secondary)]" />
           </button>
         </div>
       </div>
 
       {/* 设置面板 */}
       {showSettings && (
-        <div className="p-4 bg-yellow-50 border-b border-yellow-200">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div className="p-4 bg-[var(--color-callout-bg)] border-b border-[var(--color-border-strong)] rounded-none">
+          <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
             OpenAI API Key
           </label>
           <input
@@ -184,15 +184,15 @@ export const AIPanel: React.FC<AIPanelProps> = ({
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="sk-..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-md mb-2"
+            className="w-full px-3 py-2 border border-[var(--color-input-border)] rounded-md mb-2 bg-[var(--color-input-bg)] text-[var(--color-text-primary)] placeholder:text-[var(--color-input-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-soft)] transition-colors duration-200"
           />
           <button
             onClick={handleSaveApiKey}
-            className="w-full px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+            className="w-full px-3 py-2 bg-[var(--color-accent)] text-white rounded-md hover:opacity-90 transition-opacity"
           >
             保存
           </button>
-          <p className="text-xs text-gray-600 mt-2">
+          <p className="text-xs text-[var(--color-text-secondary)] mt-2">
             注意：API Key 存储在本地，仅用于开发演示。
           </p>
         </div>
@@ -201,9 +201,9 @@ export const AIPanel: React.FC<AIPanelProps> = ({
       {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto p-4">
         {messages.length === 0 ? (
-          <div className="text-center text-gray-500 mt-8">
+          <div className="text-center text-[var(--color-text-muted)] mt-8">
             <p>开始与 AI 助手对话</p>
-            <p className="text-sm mt-2">选中笔记内容后提问，AI 会基于上下文回答</p>
+            <p className="text-sm mt-2 text-[var(--color-text-secondary)]">选中笔记内容后提问，AI 会基于上下文回答</p>
           </div>
         ) : (
           messages.map(message => (
@@ -223,11 +223,11 @@ export const AIPanel: React.FC<AIPanelProps> = ({
       </div>
 
       {/* 输入区 */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-[var(--color-border-strong)]">
         {selectedBlockContent && (
-          <div className="mb-2 p-2 bg-blue-50 rounded text-sm text-gray-700">
+          <div className="mb-2 p-2 bg-[var(--color-block-selected-bg)] rounded text-sm text-[var(--color-text-primary)]">
             <span className="font-medium">选中内容：</span>
-            <span className="text-gray-600">
+            <span className="text-[var(--color-text-secondary)]">
               {selectedBlockContent.slice(0, 50)}
               {selectedBlockContent.length > 50 ? '...' : ''}
             </span>
@@ -240,26 +240,25 @@ export const AIPanel: React.FC<AIPanelProps> = ({
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="输入问题...（Enter 发送，Shift+Enter 换行）"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md resize-none"
+            className="flex-1 px-3 py-2 border border-[var(--color-input-border)] rounded-md resize-none bg-[var(--color-input-bg)] text-[var(--color-text-primary)] placeholder:text-[var(--color-input-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-soft)] transition-colors duration-200"
             rows={3}
             disabled={isStreaming}
           />
           <button
             onClick={handleSend}
             disabled={isStreaming || !input.trim()}
-            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 
-                     disabled:bg-gray-300 disabled:cursor-not-allowed
-                     flex items-center justify-center"
+            className="px-4 py-2 bg-[var(--color-accent)] text-white rounded-md hover:opacity-90 
+                     disabled:bg-[var(--color-border-subtle)] disabled:text-[var(--color-text-muted)] disabled:cursor-not-allowed
+                     flex items-center justify-center transition-colors duration-200"
           >
             <Send className="w-5 h-5" />
           </button>
         </div>
 
         {isStreaming && (
-          <div className="mt-2 text-sm text-gray-500">AI 正在思考...</div>
+          <div className="mt-2 text-sm text-[var(--color-text-muted)]">AI 正在思考...</div>
         )}
       </div>
     </div>
   );
 };
-
