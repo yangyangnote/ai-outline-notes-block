@@ -14,7 +14,8 @@ export interface Block {
 export interface Page {
   id: string;
   title: string;
-  type: 'note' | 'daily';  // 普通笔记 or 日记
+  type: 'note' | 'daily';
+  isReference?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -41,4 +42,3 @@ export interface EditorState {
   selectedBlockId: string | null;
   isAIPanelOpen: boolean;
 }
-

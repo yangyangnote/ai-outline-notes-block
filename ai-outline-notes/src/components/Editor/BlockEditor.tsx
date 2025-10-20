@@ -1,5 +1,5 @@
 // 单个块编辑器组件
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useLayoutEffect } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import type { Block } from '../../types';
 
@@ -59,6 +59,29 @@ const parseMarkdownImage = (value: string): ParsedMarkdownImage | null => {
   };
 };
 
+const findWikiLinkAtPosition = (text: string, position: number) => {
+  const openIndex = text.lastIndexOf('[[', position);
+  if (openIndex === -1) {
+    return null;
+  }
+
+  const closeIndex = text.indexOf(']]', position);
+  if (closeIndex === -1) {
+    return null;
+  }
+
+  if (position <= openIndex + 1 || position > closeIndex) {
+    return null;
+  }
+
+  const title = text.slice(openIndex + 2, closeIndex);
+  return {
+    title,
+    start: openIndex,
+    end: closeIndex + 2,
+  };
+};
+
 interface BlockEditorProps {
   block: Block;
   level: number; // 缩进层级
@@ -74,6 +97,7 @@ interface BlockEditorProps {
   onFocusPrevious: (id: string) => void;
   onFocusNext: (id: string) => void;
   onToggleCollapse: (id: string) => void;
+  onLinkClick?: (title: string) => void;
 }
 
 export const BlockEditor: React.FC<BlockEditorProps> = ({
@@ -91,9 +115,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   onFocusPrevious,
   onFocusNext,
   onToggleCollapse,
+  onLinkClick,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const displayContentRef = useRef<HTMLDivElement>(null);
+  const pendingCursorRef = useRef<number | null>(null);
+  const lastSelectionRef = useRef<number | null>(null);
   const [content, setContent] = useState(block.content);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -101,10 +129,27 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     setContent(block.content);
   }, [block.content]);
 
-  useEffect(() => {
-    if (isSelected && textareaRef.current) {
-      textareaRef.current.focus();
+  useLayoutEffect(() => {
+    if (!isSelected || !textareaRef.current) {
+      return;
     }
+
+    const textarea = textareaRef.current;
+    textarea.focus();
+
+    const pending = pendingCursorRef.current;
+    pendingCursorRef.current = null;
+
+    const fallback = lastSelectionRef.current;
+    const cursorPosition =
+      typeof pending === 'number'
+        ? pending
+        : typeof fallback === 'number'
+          ? fallback
+          : textarea.value.length;
+
+    const clamped = Math.max(0, Math.min(cursorPosition, textarea.value.length));
+    textarea.setSelectionRange(clamped, clamped);
   }, [isSelected]);
 
   // 自动调整 textarea 高度
@@ -194,6 +239,11 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     onSelect(block.id);
   };
   const handleBlur = () => {
+    if (textareaRef.current) {
+      lastSelectionRef.current = textareaRef.current.selectionStart;
+    } else {
+      lastSelectionRef.current = null;
+    }
     onDeselect(block.id);
   };
 
@@ -262,12 +312,206 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     onDelete(block.id);
     onFocusPrevious(block.id);
   };
+ 
+  const navigateToLinkAtCaret = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    if (textarea.selectionStart !== textarea.selectionEnd) {
+      return;
+    }
+
+    const caretPosition = textarea.selectionStart;
+    const link = findWikiLinkAtPosition(textarea.value, caretPosition);
+    if (!link) {
+      return;
+    }
+
+    const normalizedTitle = link.title.trim();
+    if (!normalizedTitle) {
+      return;
+    }
+
+    textarea.blur();
+    onLinkClick?.(normalizedTitle);
+  };
+
+  const handleTextareaMouseUp = (event: React.MouseEvent<HTMLTextAreaElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    if (!event.metaKey && !event.ctrlKey) {
+      return;
+    }
+
+    event.preventDefault();
+
+    setTimeout(() => {
+      navigateToLinkAtCaret();
+    }, 0);
+  };
+
+  const handleTextareaTouchEnd = (event: React.TouchEvent<HTMLTextAreaElement>) => {
+    if (!event.metaKey && !event.ctrlKey) {
+      return;
+    }
+
+    event.preventDefault();
+    setTimeout(() => {
+      navigateToLinkAtCaret();
+    }, 0);
+  };
+
+  const updatePendingCursorFromPoint = (clientX: number, clientY: number) => {
+    const container = displayContentRef.current;
+    if (!container) {
+      pendingCursorRef.current = null;
+      return;
+    }
+
+    const doc = container.ownerDocument as Document & {
+      caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    };
+
+    let range: Range | null = null;
+
+    if (typeof doc.caretRangeFromPoint === 'function') {
+      range = doc.caretRangeFromPoint(clientX, clientY);
+    }
+
+    if (!range && typeof doc.caretPositionFromPoint === 'function') {
+      const position = doc.caretPositionFromPoint(clientX, clientY);
+      if (position) {
+        range = doc.createRange();
+        range.setStart(position.offsetNode, position.offset);
+        range.collapse(true);
+      }
+    }
+
+    if (!range) {
+      pendingCursorRef.current = block.content.length;
+      return;
+    }
+
+    const startContainer = range.startContainer;
+    if (!container.contains(startContainer) && startContainer !== container) {
+      pendingCursorRef.current = block.content.length;
+      return;
+    }
+
+    const preSelectionRange = range.cloneRange();
+    preSelectionRange.selectNodeContents(container);
+    preSelectionRange.setEnd(range.startContainer, range.startOffset);
+
+    const offset = preSelectionRange.toString().length;
+    pendingCursorRef.current = Math.max(0, Math.min(offset, block.content.length));
+  };
+
+  const handleDisplayMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (target && target.closest('[data-wiki-link="true"]')) {
+      pendingCursorRef.current = null;
+      return;
+    }
+
+    updatePendingCursorFromPoint(event.clientX, event.clientY);
+  };
+
+  const handleDisplayTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (target && target.closest('[data-wiki-link="true"]')) {
+      pendingCursorRef.current = null;
+      return;
+    }
+
+    const touch = event.touches[0];
+    if (!touch) {
+      return;
+    }
+
+    updatePendingCursorFromPoint(touch.clientX, touch.clientY);
+  };
+
+  const renderDisplayContent = (): React.ReactNode => {
+    const trimmed = block.content.trim();
+    if (trimmed.length === 0) {
+      return (
+        <span className="text-[var(--color-text-muted)] italic">
+          点击开始输入...
+        </span>
+      );
+    }
+
+    const regex = /\[\[([^\]]+)\]\]/g;
+    const elements: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(block.content)) !== null) {
+      const matchIndex = match.index;
+      const before = block.content.slice(lastIndex, matchIndex);
+      if (before.length > 0) {
+        elements.push(
+          <span key={`text-${block.id}-${lastIndex}`} className="whitespace-pre-wrap break-words">
+            {before}
+          </span>
+        );
+      }
+
+      const rawTitle = match[1];
+      const normalizedTitle = rawTitle.trim();
+      const labelTitle = normalizedTitle || rawTitle || '未命名页面';
+      elements.push(
+        <button
+          type="button"
+          key={`link-${block.id}-${matchIndex}`}
+          data-wiki-link="true"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (normalizedTitle.length > 0) {
+              onLinkClick?.(normalizedTitle);
+            }
+          }}
+          className="inline-flex items-center rounded px-1.5 py-0.5 bg-[var(--color-link-bg)] text-[var(--color-link-text)] hover:bg-[var(--color-link-hover-bg)] transition-colors duration-200 border border-transparent"
+          title={`跳转到页面：${labelTitle}`}
+        >
+          {`[[${normalizedTitle || rawTitle || ''}]]`}
+        </button>
+      );
+
+      lastIndex = regex.lastIndex;
+    }
+
+    const after = block.content.slice(lastIndex);
+    if (after.length > 0) {
+      elements.push(
+        <span key={`text-${block.id}-${lastIndex}-end`} className="whitespace-pre-wrap break-words">
+          {after}
+        </span>
+      );
+    }
+
+    return elements;
+  };
 
   return (
     <div
       ref={containerRef}
-      className={`block-item flex items-start group rounded-md transition-colors duration-200 hover:bg-[var(--color-block-hover-bg)] ${isSelected ? 'bg-[var(--color-block-selected-bg)]' : ''}`}
-      style={{ paddingLeft: `${level * 24}px` }}
+      className="block-item flex items-start group min-h-[24px]"
+      style={{
+        paddingLeft: `${level * 24}px`,
+        paddingTop: '2px',
+        paddingBottom: '2px'
+      }}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragEnterCapture={handleDragEnter}
@@ -275,54 +519,65 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       onDrop={handleDrop}
       onDropCapture={handleDrop}
     >
-      {/* 折叠/展开按钮 */}
-      <div className="flex-shrink-0 mr-1 pt-2">
+      {/* Logseq 风格的小圆点 - 合并按钮 */}
+      <div className="relative flex-shrink-0 mr-2 pt-[7px]">
         {hasChildren ? (
+          <div className="flex items-center">
+            <button
+              onClick={() => onToggleCollapse(block.id)}
+              onContextMenu={handleMenuToggle}
+              className="w-[18px] h-[18px] flex items-center justify-center hover:bg-gray-200/50 rounded transition-colors duration-150"
+              title={block.collapsed ? '展开 | 右键更多操作' : '折叠 | 右键更多操作'}
+            >
+              {block.collapsed ? (
+                <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+              )}
+            </button>
+            {isMenuOpen && (
+              <div className="absolute left-6 top-0 z-20 w-48 rounded-md border border-[var(--color-popover-border)] bg-[var(--color-popover-bg)] py-2 shadow-lg transition-colors duration-200">
+                <div className="px-3 pb-1 text-xs font-medium text-[var(--color-text-secondary)]">块操作</div>
+                <button
+                  type="button"
+                  onClick={handleDeleteConfirm}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] transition-colors duration-200 rounded-md"
+                >
+                  <span>删除选定块</span>
+                  <span className="text-xs text-[var(--color-text-muted)]">Delete</span>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
           <button
-            onClick={() => onToggleCollapse(block.id)}
-            className="w-5 h-5 flex items-center justify-center hover:bg-[var(--color-block-hover-bg)] rounded transition-colors duration-200"
-            title={block.collapsed ? '展开' : '折叠'}
+            onContextMenu={handleMenuToggle}
+            className="w-[18px] h-[18px] flex items-center justify-center hover:bg-gray-200/50 rounded transition-colors duration-150 relative"
+            title="右键更多操作"
           >
-            {block.collapsed ? (
-              <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)]" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-[var(--color-text-muted)]" />
+            <div
+              className="rounded-full"
+              style={{
+                width: '6px',
+                height: '6px',
+                backgroundColor: 'rgb(199, 199, 199)',
+                opacity: 0.8
+              }}
+            />
+            {isMenuOpen && (
+              <div className="absolute left-6 top-0 z-20 w-48 rounded-md border border-[var(--color-popover-border)] bg-[var(--color-popover-bg)] py-2 shadow-lg transition-colors duration-200">
+                <div className="px-3 pb-1 text-xs font-medium text-[var(--color-text-secondary)]">块操作</div>
+                <button
+                  type="button"
+                  onClick={handleDeleteConfirm}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] transition-colors duration-200 rounded-md"
+                >
+                  <span>删除选定块</span>
+                  <span className="text-xs text-[var(--color-text-muted)]">Delete</span>
+                </button>
+              </div>
             )}
           </button>
-        ) : (
-          <div className="w-5 h-5" /> // 占位，保持对齐
-        )}
-      </div>
-
-      {/* 块拖拽手柄 */}
-      <div className="relative flex-shrink-0 mr-2 pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          type="button"
-          onContextMenu={handleMenuToggle}
-          className="cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors duration-200"
-          title="更多操作"
-        >
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
-            <circle cx="4" cy="4" r="1.5"/>
-            <circle cx="12" cy="4" r="1.5"/>
-            <circle cx="4" cy="8" r="1.5"/>
-            <circle cx="12" cy="8" r="1.5"/>
-            <circle cx="4" cy="12" r="1.5"/>
-            <circle cx="12" cy="12" r="1.5"/>
-          </svg>
-        </button>
-        {isMenuOpen && (
-          <div className="absolute left-6 top-0 z-20 w-48 rounded-md border border-[var(--color-popover-border)] bg-[var(--color-popover-bg)] py-2 shadow-lg transition-colors duration-200">
-            <div className="px-3 pb-1 text-xs font-medium text-[var(--color-text-secondary)]">块操作</div>
-            <button
-              type="button"
-              onClick={handleDeleteConfirm}
-              className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] transition-colors duration-200 rounded-md"
-            >
-              <span>删除选定块</span>
-              <span className="text-xs text-[var(--color-text-muted)]">Delete</span>
-            </button>
-          </div>
         )}
       </div>
 
@@ -332,7 +587,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <button
             type="button"
             onClick={() => onSelect(block.id)}
-            className="w-full cursor-pointer rounded py-2 px-2 transition-colors hover:bg-[var(--color-block-hover-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+            className="w-full cursor-pointer rounded-sm py-0.5 px-1 transition-colors hover:bg-gray-50 focus:outline-none"
             title="点击查看图片地址"
             onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
@@ -347,12 +602,15 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               className="max-h-80 max-w-full rounded border border-[var(--color-border-subtle)] object-contain"
             />
           </button>
-        ) : (
+        ) : isSelected ? (
           <textarea
             ref={textareaRef}
+            data-block-textarea={block.id}
             value={content}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onMouseUp={handleTextareaMouseUp}
+            onTouchEnd={handleTextareaTouchEnd}
             onFocus={handleFocus}
             onBlur={handleBlur}
             onDragEnter={handleDragEnter}
@@ -361,11 +619,37 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             onDragOverCapture={handleDragOver}
             onDrop={handleDrop}
             onDropCapture={handleDrop}
-            className="w-full resize-none border-none outline-none bg-transparent py-2 px-2 rounded
-                       focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-[var(--color-editor-bg)]
-                       text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] selection:bg-[var(--color-accent-soft)]"
+            autoFocus={isSelected}
+            className="w-full resize-none border-none outline-none bg-transparent py-0.5 px-1 rounded-sm
+                       focus:ring-0 focus:outline-none
+                       text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] selection:bg-blue-200/50"
             rows={1}
+            style={{ lineHeight: '1.5' }}
           />
+        ) : (
+          <div
+            ref={displayContentRef}
+            tabIndex={0}
+            role="button"
+            onClick={() => onSelect(block.id)}
+            onFocus={(event) => {
+              if (event.target === event.currentTarget) {
+                onSelect(block.id);
+              }
+            }}
+            onMouseDown={handleDisplayMouseDown}
+            onTouchStart={handleDisplayTouchStart}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                onSelect(block.id);
+              }
+            }}
+            className="w-full cursor-text py-0.5 px-1 rounded-sm outline-none focus:ring-0 text-[var(--color-text-primary)] whitespace-pre-wrap break-words"
+            style={{ lineHeight: '1.5' }}
+          >
+            {renderDisplayContent()}
+          </div>
         )}
       </div>
     </div>

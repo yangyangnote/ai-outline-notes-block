@@ -13,7 +13,6 @@ export async function cleanupDuplicatePages(): Promise<void> {
     
     // 保留最新的一个，删除其他的
     const sortedPages = welcomePages.sort((a, b) => b.createdAt - a.createdAt);
-    const keepPage = sortedPages[0];
     const deletePages = sortedPages.slice(1);
     
     for (const page of deletePages) {
@@ -100,6 +99,5 @@ export async function getDatabaseStats(): Promise<{
     totalSize,
   };
 }
-
 
 

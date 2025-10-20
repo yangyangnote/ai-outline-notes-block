@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, X, Settings } from 'lucide-react';
 import { ChatMessage } from './ChatMessage';
-import { streamChatCompletion, isOpenAIInitialized, estimateTokens, initializeOpenAI } from '../../lib/openai';
+import { streamChatCompletion, isOpenAIInitialized, initializeOpenAI } from '../../lib/openai';
 import { createBlock } from '../../utils/blockUtils';
 
 interface Message {

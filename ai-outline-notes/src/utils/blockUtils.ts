@@ -1,6 +1,41 @@
 // 块操作工具函数
 import { db } from '../db/database';
+import { extractPageLinks, ensurePageByTitle } from './pageUtils';
+import { getSyncEngine } from '../lib/syncEngine';
 import type { Block } from '../types';
+
+const getUniqueLinkTitles = (content: string): string[] => {
+  return Array.from(
+    new Set(
+      extractPageLinks(content)
+        .map(title => title.trim())
+        .filter(title => title.length > 0)
+    )
+  );
+};
+
+export const ensureLinksForContent = async (content: string): Promise<void> => {
+  const linkTitles = getUniqueLinkTitles(content);
+  for (const title of linkTitles) {
+    await ensurePageByTitle(title, 'note', { isReference: true });
+  }
+};
+
+// 触发页面同步到文件系统
+async function triggerPageSync(pageId: string): Promise<void> {
+  try {
+    const syncEngine = getSyncEngine();
+    // 异步同步，不阻塞 UI
+    setTimeout(() => {
+      syncEngine.syncToFileSystem(pageId).catch(err => {
+        console.error('后台同步失败:', err);
+      });
+    }, 100);
+  } catch (error) {
+    // 静默失败，不影响编辑体验
+    console.warn('同步触发失败:', error);
+  }
+}
 
 // 创建新块
 export async function createBlock(
@@ -14,7 +49,9 @@ export async function createBlock(
   // 如果没有指定 order，获取同级最大 order + 1
   if (order === undefined) {
     const siblings = await db.blocks
-      .where({ pageId, parentId })
+      .where('pageId')
+      .equals(pageId)
+      .filter(block => block.parentId === parentId)
       .toArray();
     order = siblings.length > 0 ? Math.max(...siblings.map(b => b.order)) + 1 : 0;
   }
@@ -31,19 +68,33 @@ export async function createBlock(
   };
   
   await db.blocks.add(block);
+  await ensureLinksForContent(content);
+  
+  // 触发同步到文件系统
+  await triggerPageSync(pageId);
+  
   return block;
 }
 
 // 更新块内容
 export async function updateBlock(id: string, content: string): Promise<void> {
+  const block = await db.blocks.get(id);
+  if (!block) return;
+
   await db.blocks.update(id, {
     content,
     updatedAt: Date.now(),
   });
+
+  // 触发同步到文件系统
+  await triggerPageSync(block.pageId);
 }
 
 // 删除块（递归删除子块）
 export async function deleteBlock(id: string): Promise<void> {
+  const block = await db.blocks.get(id);
+  if (!block) return;
+
   // 查找所有子块
   const children = await db.blocks.where({ parentId: id }).toArray();
   
@@ -54,6 +105,9 @@ export async function deleteBlock(id: string): Promise<void> {
   
   // 删除当前块
   await db.blocks.delete(id);
+
+  // 触发同步到文件系统
+  await triggerPageSync(block.pageId);
 }
 
 // 移动块（改变父块或顺序）
@@ -151,4 +205,3 @@ export async function hasChildren(blockId: string): Promise<boolean> {
   const children = await db.blocks.where({ parentId: blockId }).count();
   return children > 0;
 }
-

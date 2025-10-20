@@ -1,10 +1,12 @@
 // 侧边栏 - 页面列表
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FileText, Plus, Calendar, Search } from 'lucide-react';
+import { FileText, Plus, Calendar, Search, Folder, RefreshCw, Settings } from 'lucide-react';
 import { db } from '../../db/database';
 import { createPage, getTodayDaily } from '../../utils/pageUtils';
-import type { Page } from '../../types';
+import { getVaultHandle, getVaultName, clearVaultHandle, isFileSystemSupported } from '../../lib/fileSystem';
+import { getSyncEngine } from '../../lib/syncEngine';
+import type { SyncState } from '../../lib/syncEngine';
 
 interface SidebarProps {
   currentPageId: string | null;
@@ -16,6 +18,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onPageSelect,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [vaultName, setVaultName] = useState<string>('');
+  const [syncState, setSyncState] = useState<SyncState | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // 加载 vault 信息
+  useEffect(() => {
+    const loadVaultInfo = async () => {
+      if (!isFileSystemSupported()) return;
+
+      const handle = await getVaultHandle();
+      if (handle) {
+        setVaultName(getVaultName(handle));
+        
+        // 监听同步状态
+        const syncEngine = getSyncEngine();
+        const unsubscribe = syncEngine.onStateChange(setSyncState);
+        
+        return unsubscribe;
+      }
+    };
+
+    const unsubscribe = loadVaultInfo();
+    return () => {
+      unsubscribe?.then(fn => fn?.());
+    };
+  }, []);
 
   // 实时查询所有页面
   const pages = useLiveQuery(
@@ -23,9 +51,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     []
   );
 
-  const filteredPages = pages?.filter(page =>
-    page.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredPages = pages
+    ?.filter(page => !page.isReference)
+    .filter(page =>
+      page.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   const handleCreatePage = async () => {
     const title = prompt('输入页面标题：');
@@ -38,6 +68,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleOpenToday = async () => {
     const todayPage = await getTodayDaily();
     onPageSelect(todayPage.id);
+  };
+
+  const handleManualSync = async () => {
+    try {
+      const syncEngine = getSyncEngine();
+      await syncEngine.fullSync();
+    } catch (error) {
+      console.error('手动同步失败:', error);
+      alert('同步失败：' + (error instanceof Error ? error.message : '未知错误'));
+    }
+  };
+
+  const handleChangeVault = async () => {
+    if (confirm('切换笔记库会关闭当前笔记，确定继续吗？')) {
+      await clearVaultHandle();
+      window.location.reload();
+    }
   };
 
   return (
@@ -110,8 +157,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* 底部信息 */}
-      <div className="p-4 border-t border-[var(--color-border-strong)] text-xs text-[var(--color-text-muted)]">
-        <p>共 {pages?.length || 0} 个页面</p>
+      <div className="p-4 border-t border-[var(--color-border-strong)] space-y-3">
+        {/* Vault 信息 */}
+        {vaultName && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+              <Folder className="w-3 h-3" />
+              <span className="truncate" title={vaultName}>{vaultName}</span>
+            </div>
+
+            {/* 同步状态 */}
+            {syncState && (
+              <div className="flex items-center gap-2 text-xs">
+                {syncState.status === 'syncing' && (
+                  <>
+                    <RefreshCw className="w-3 h-3 animate-spin text-blue-500" />
+                    <span className="text-blue-500">{syncState.message}</span>
+                  </>
+                )}
+                {syncState.status === 'success' && (
+                  <span className="text-green-500">✓ 已同步</span>
+                )}
+                {syncState.status === 'error' && (
+                  <span className="text-red-500">✗ 同步错误</span>
+                )}
+              </div>
+            )}
+
+            {/* 操作按钮 */}
+            <div className="flex gap-2">
+              <button
+                onClick={handleManualSync}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded border border-[var(--color-border-subtle)] bg-[var(--color-button-bg)] text-[var(--color-button-text)] hover:bg-[var(--color-button-hover)] transition-colors"
+                title="手动同步"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>同步</span>
+              </button>
+              <button
+                onClick={() => setShowSettings(!showSettings)}
+                className="flex items-center justify-center px-2 py-1.5 text-xs rounded border border-[var(--color-border-subtle)] bg-[var(--color-button-bg)] text-[var(--color-button-text)] hover:bg-[var(--color-button-hover)] transition-colors"
+                title="设置"
+              >
+                <Settings className="w-3 h-3" />
+              </button>
+            </div>
+
+            {/* 设置菜单 */}
+            {showSettings && (
+              <div className="absolute bottom-16 left-4 right-4 bg-[var(--color-popover-bg)] border border-[var(--color-popover-border)] rounded-md shadow-lg p-2 z-50">
+                <button
+                  onClick={handleChangeVault}
+                  className="w-full text-left px-3 py-2 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-sidebar-hover)] rounded transition-colors"
+                >
+                  切换笔记库
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="text-xs text-[var(--color-text-muted)]">
+          <p>共 {filteredPages?.length || 0} 个页面</p>
+        </div>
       </div>
     </div>
   );

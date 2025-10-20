@@ -35,6 +35,22 @@ class NotesDatabase extends Dexie {
       }
       console.log('数据库升级到版本 2：已为所有块添加 collapsed 字段');
     });
+
+    // 版本 3：页面增加 isReference 标记
+    this.version(3).stores({
+      blocks: 'id, pageId, parentId, order, collapsed, createdAt, updatedAt',
+      pages: 'id, title, type, isReference, createdAt, updatedAt',
+      chatMessages: 'id, pageId, createdAt',
+      conversations: 'id, pageId, createdAt, updatedAt'
+    }).upgrade(async tx => {
+      const pages = await tx.table('pages').toArray();
+      for (const page of pages) {
+        if (page.isReference === undefined) {
+          await tx.table('pages').update(page.id, { isReference: false });
+        }
+      }
+      console.log('数据库升级到版本 3：已为页面添加 isReference 标记');
+    });
   }
 }
 
@@ -65,6 +81,7 @@ export async function initializeDatabase() {
       id: welcomePageId,
       title: '欢迎使用 AI 大纲笔记',
       type: 'note',
+      isReference: false,
       createdAt: now,
       updatedAt: now,
     });
@@ -151,4 +168,3 @@ export async function initializeDatabase() {
   isInitializing = false;
   isInitialized = true;
 }
-

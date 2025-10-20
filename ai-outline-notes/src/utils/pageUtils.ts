@@ -1,23 +1,81 @@
 // 页面操作工具函数
 import { db } from '../db/database';
+import { getSyncEngine } from '../lib/syncEngine';
 import type { Page } from '../types';
+
+// 触发页面同步到文件系统
+async function triggerPageSync(pageId: string): Promise<void> {
+  try {
+    const syncEngine = getSyncEngine();
+    setTimeout(() => {
+      syncEngine.syncToFileSystem(pageId).catch(err => {
+        console.error('后台同步失败:', err);
+      });
+    }, 100);
+  } catch (error) {
+    console.warn('同步触发失败:', error);
+  }
+}
 
 // 创建新页面
 export async function createPage(
   title: string,
-  type: 'note' | 'daily' = 'note'
+  type: 'note' | 'daily' = 'note',
+  options?: {
+    isReference?: boolean;
+  }
 ): Promise<Page> {
   const now = Date.now();
   const page: Page = {
     id: crypto.randomUUID(),
     title,
     type,
+    isReference: options?.isReference ?? false,
     createdAt: now,
     updatedAt: now,
   };
   
   await db.pages.add(page);
+  
+  // 触发同步到文件系统
+  await triggerPageSync(page.id);
+  
   return page;
+}
+
+// 根据标题获取页面
+export async function getPageByTitle(title: string): Promise<Page | undefined> {
+  const normalized = title.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return await db.pages.where('title').equals(normalized).first();
+}
+
+// 确保页面存在（若不存在则创建）
+export async function ensurePageByTitle(
+  title: string,
+  type: 'note' | 'daily' = 'note',
+  options?: {
+    isReference?: boolean;
+  }
+): Promise<Page | undefined> {
+  const normalized = title.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  const existing = await getPageByTitle(normalized);
+  if (existing) {
+    if (options?.isReference === false && existing.isReference) {
+      await db.pages.update(existing.id, { isReference: false, updatedAt: Date.now() });
+      return await db.pages.get(existing.id) ?? existing;
+    }
+    return existing;
+  }
+
+  return await createPage(normalized, type, options);
 }
 
 // 更新页面标题
@@ -26,6 +84,9 @@ export async function updatePageTitle(id: string, title: string): Promise<void> 
     title,
     updatedAt: Date.now(),
   });
+
+  // 触发同步到文件系统
+  await triggerPageSync(id);
 }
 
 // 删除页面（同时删除所有块）
@@ -55,7 +116,6 @@ export async function searchPages(query: string): Promise<Page[]> {
 // 创建或获取今日日记
 export async function getTodayDaily(): Promise<Page> {
   const today = new Date();
-  const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
   const title = formatDateTitle(today);
   
   // 查找是否已存在今日日记
@@ -120,4 +180,3 @@ export async function getBacklinks(pageTitle: string): Promise<Array<{
   
   return backlinks;
 }
-

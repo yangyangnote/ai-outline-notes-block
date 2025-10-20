@@ -36,6 +36,9 @@
     --color-scrollbar-track: rgba(31, 37, 51, 0.08);
     --color-danger-text: #d64545;
     --color-danger-bg: rgba(214, 69, 69, 0.12);
+    --color-link-text: #2f80ed;
+    --color-link-bg: rgba(47, 128, 237, 0.12);
+    --color-link-hover-bg: rgba(47, 128, 237, 0.22);
   }
 
   .theme-things-light {
@@ -75,6 +78,9 @@
     --color-scrollbar-track: rgba(31, 37, 45, 0.6);
     --color-danger-text: #ff8080;
     --color-danger-bg: rgba(255, 128, 128, 0.16);
+    --color-link-text: #9bc1ff;
+    --color-link-bg: rgba(76, 141, 255, 0.2);
+    --color-link-hover-bg: rgba(76, 141, 255, 0.32);
   }
 }
 
