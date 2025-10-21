@@ -262,8 +262,20 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
   };
 
   const handleDelete = async (id: string) => {
+    // 在删除前找到上一个块的位置
+    const currentIndex = flatTree.findIndex(b => b.id === id);
+    const previousBlock = currentIndex > 0 ? flatTree[currentIndex - 1] : null;
+
     await deleteBlock(id);
-    setSelectedBlockId(null);
+
+    // 如果有上一个块，聚焦到它；否则清空选中状态
+    if (previousBlock) {
+      setSelectedBlockId(previousBlock.id);
+      pendingFocusRef.current = { blockId: previousBlock.id };
+      focusBlockTextarea(previousBlock.id);
+    } else {
+      setSelectedBlockId(null);
+    }
   };
 
   const handleIndent = async (id: string) => {

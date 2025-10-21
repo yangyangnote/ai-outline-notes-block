@@ -207,7 +207,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     if (e.key === 'Backspace' && content === '') {
       e.preventDefault();
       onDelete(block.id);
-      onFocusPrevious(block.id);
       return;
     }
 
@@ -310,7 +309,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const handleDeleteConfirm = () => {
     setIsMenuOpen(false);
     onDelete(block.id);
-    onFocusPrevious(block.id);
   };
  
   const navigateToLinkAtCaret = () => {
@@ -519,66 +517,65 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       onDrop={handleDrop}
       onDropCapture={handleDrop}
     >
-      {/* Logseq 风格的小圆点 - 合并按钮 */}
-      <div className="relative flex-shrink-0 mr-2 pt-[7px]">
-        {hasChildren ? (
-          <div className="flex items-center">
-            <button
-              onClick={() => onToggleCollapse(block.id)}
-              onContextMenu={handleMenuToggle}
-              className="w-[18px] h-[18px] flex items-center justify-center hover:bg-gray-200/50 rounded transition-colors duration-150"
-              title={block.collapsed ? '展开 | 右键更多操作' : '折叠 | 右键更多操作'}
-            >
-              {block.collapsed ? (
-                <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
-              ) : (
-                <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
-              )}
-            </button>
-            {isMenuOpen && (
-              <div className="absolute left-6 top-0 z-20 w-48 rounded-md border border-[var(--color-popover-border)] bg-[var(--color-popover-bg)] py-2 shadow-lg transition-colors duration-200">
-                <div className="px-3 pb-1 text-xs font-medium text-[var(--color-text-secondary)]">块操作</div>
-                <button
-                  type="button"
-                  onClick={handleDeleteConfirm}
-                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] transition-colors duration-200 rounded-md"
-                >
-                  <span>删除选定块</span>
-                  <span className="text-xs text-[var(--color-text-muted)]">Delete</span>
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
+      {/* Logseq 风格的折叠箭头 + 圆点 */}
+      <div className="relative flex items-center flex-shrink-0 mr-1 pt-[7px]">
+        {/* 折叠/展开箭头 - 只在有子节点时显示 */}
+        {hasChildren && (
           <button
-            onContextMenu={handleMenuToggle}
-            className="w-[18px] h-[18px] flex items-center justify-center hover:bg-gray-200/50 rounded transition-colors duration-150 relative"
-            title="右键更多操作"
+            onClick={() => onToggleCollapse(block.id)}
+            className="w-[14px] h-[18px] flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-sm transition-colors duration-100 mr-0.5"
+            title={block.collapsed ? '展开' : '折叠'}
           >
-            <div
-              className="rounded-full"
-              style={{
-                width: '6px',
-                height: '6px',
-                backgroundColor: 'rgb(199, 199, 199)',
-                opacity: 0.8
-              }}
-            />
-            {isMenuOpen && (
-              <div className="absolute left-6 top-0 z-20 w-48 rounded-md border border-[var(--color-popover-border)] bg-[var(--color-popover-bg)] py-2 shadow-lg transition-colors duration-200">
-                <div className="px-3 pb-1 text-xs font-medium text-[var(--color-text-secondary)]">块操作</div>
-                <button
-                  type="button"
-                  onClick={handleDeleteConfirm}
-                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] transition-colors duration-200 rounded-md"
-                >
-                  <span>删除选定块</span>
-                  <span className="text-xs text-[var(--color-text-muted)]">Delete</span>
-                </button>
-              </div>
+            {block.collapsed ? (
+              <ChevronRight className="w-2.5 h-2.5 text-gray-500 dark:text-gray-400" />
+            ) : (
+              <ChevronDown className="w-2.5 h-2.5 text-gray-500 dark:text-gray-400" />
             )}
           </button>
         )}
+
+        {/* 圆点按钮 - 始终显示 */}
+        <button
+          onContextMenu={handleMenuToggle}
+          className="w-[18px] h-[18px] flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-sm transition-colors duration-100 relative"
+          title="右键更多操作"
+        >
+          {hasChildren && block.collapsed ? (
+            // 折叠状态：空心圆环 - 更细的边框，稍大一点
+            <div
+              className="rounded-full transition-all duration-150 ease-in-out"
+              style={{
+                width: '6px',
+                height: '6px',
+                border: '1.2px solid #cbd5e1',
+                backgroundColor: 'transparent',
+              }}
+            />
+          ) : (
+            // 展开或无子节点：实心小圆点 - 稍微淡一点的颜色
+            <div
+              className="rounded-full transition-all duration-150 ease-in-out"
+              style={{
+                width: '4px',
+                height: '4px',
+                backgroundColor: '#cbd5e1',
+              }}
+            />
+          )}
+          {isMenuOpen && (
+            <div className="absolute left-6 top-0 z-20 w-48 rounded-md border border-[var(--color-popover-border)] bg-[var(--color-popover-bg)] py-2 shadow-lg transition-colors duration-200">
+              <div className="px-3 pb-1 text-xs font-medium text-[var(--color-text-secondary)]">块操作</div>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] transition-colors duration-200 rounded-md"
+              >
+                <span>删除选定块</span>
+                <span className="text-xs text-[var(--color-text-muted)]">Delete</span>
+              </button>
+            </div>
+          )}
+        </button>
       </div>
 
       {/* 块内容编辑器 */}
