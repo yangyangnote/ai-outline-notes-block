@@ -262,6 +262,11 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
   };
 
   const handleDelete = async (id: string) => {
+    // 如果这是唯一的块，不允许删除
+    if (flatTree.length <= 1) {
+      return;
+    }
+
     // 在删除前找到上一个块的位置
     const currentIndex = flatTree.findIndex(b => b.id === id);
     const previousBlock = currentIndex > 0 ? flatTree[currentIndex - 1] : null;
