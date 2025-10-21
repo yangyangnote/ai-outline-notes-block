@@ -171,70 +171,63 @@ function App() {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-[var(--color-app-bg)] text-[var(--color-text-primary)] transition-colors duration-200">
+    <div className="h-screen flex flex-col overflow-hidden bg-[var(--color-app-bg)] text-[var(--color-text-primary)] transition-colors duration-200">
+      {/* 顶部拖动栏 - Logseq 风格 */}
+      <div
+        className="titlebar-drag h-12 bg-[var(--color-toolbar-bg)] border-b border-[var(--color-border-subtle)] transition-colors duration-200 flex items-center justify-end"
+        style={{
+          // 为 macOS 红绿灯按钮留出空间（检测 macOS）
+          paddingLeft: navigator.platform.toLowerCase().includes('mac') ? '80px' : '16px',
+          paddingRight: '16px'
+        }}
+      >
+        {/* 右侧按钮区域 */}
+        <div className="titlebar-no-drag flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            className="flex items-center justify-center w-8 h-8 rounded-md hover:bg-[var(--color-button-hover)] transition-colors duration-200"
+            title={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+          >
+            {theme === 'dark' ? (
+              <Sun className="w-4 h-4 text-[var(--color-text-secondary)]" />
+            ) : (
+              <Moon className="w-4 h-4 text-[var(--color-text-secondary)]" />
+            )}
+          </button>
+
+          <button
+            onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors duration-200 ${
+              isAIPanelOpen
+                ? 'bg-[var(--color-accent)] text-white'
+                : 'hover:bg-[var(--color-button-hover)] text-[var(--color-text-secondary)]'
+            }`}
+            title="AI 助手"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span className="text-sm">AI</span>
+          </button>
+        </div>
+      </div>
+
       {/* 浏览器不支持文件系统时的提示 */}
       {!isFileSystemSupported() && (
-        <div className="absolute top-0 left-0 right-0 z-50 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800 px-4 py-2">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800 px-4 py-2">
           <p className="text-sm text-yellow-800 dark:text-yellow-200 text-center">
             ⚠️ 当前浏览器不支持文件系统访问，使用 IndexedDB 存储模式。建议使用 Chrome 或 Edge 获得完整功能。
           </p>
         </div>
       )}
-      
-      {/* 左侧边栏 */}
-      <Sidebar
-        currentPageId={currentPageId}
-        onPageSelect={handlePageSelect}
-      />
 
-      {/* 主编辑区 */}
-      <div className="flex-1 flex flex-col">
-        {/* 顶部工具栏 */}
-        <div className="h-14 bg-[var(--color-toolbar-bg)] border-b border-[var(--color-border-subtle)] flex items-center justify-between px-6 transition-colors duration-200">
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
-              {currentPage?.title || '选择一个页面'}
-            </h2>
-            {currentPage && (
-              <span className="text-sm text-[var(--color-text-secondary)]">
-                {currentPage.type === 'daily' ? '日记' : '笔记'}
-              </span>
-            )}
-          </div>
+      {/* 主内容区域 */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* 左侧边栏 */}
+        <Sidebar
+          currentPageId={currentPageId}
+          onPageSelect={handlePageSelect}
+        />
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={toggleTheme}
-              className="flex items-center gap-2 px-3 py-2 rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-button-bg)] text-[var(--color-button-text)] hover:bg-[var(--color-button-hover)] transition-colors duration-200"
-            >
-              {theme === 'dark' ? (
-                <>
-                  <Sun className="w-4 h-4" />
-                  <span className="text-sm">浅色模式</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-4 h-4" />
-                  <span className="text-sm">深色模式</span>
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors duration-200 ${
-                isAIPanelOpen
-                  ? 'bg-[var(--color-accent)] text-white'
-                  : 'bg-[var(--color-ai-button-inactive-bg)] text-[var(--color-ai-button-inactive-text)] hover:bg-[var(--color-button-hover)]'
-              }`}
-            >
-              <MessageSquare className="w-5 h-5" />
-              <span>AI 助手</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 编辑器 */}
+        {/* 主编辑区 */}
         <div className="flex-1 overflow-hidden">
           {currentPageId ? (
             <OutlineEditor
@@ -248,16 +241,16 @@ function App() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* AI 对话面板 */}
-      <AIPanel
-        isOpen={isAIPanelOpen}
-        onClose={() => setIsAIPanelOpen(false)}
-        currentPageId={currentPageId}
-        currentPageTitle={currentPage?.title || ''}
-        selectedBlockContent={selectedBlockContent}
-      />
+        {/* AI 对话面板 */}
+        <AIPanel
+          isOpen={isAIPanelOpen}
+          onClose={() => setIsAIPanelOpen(false)}
+          currentPageId={currentPageId}
+          currentPageTitle={currentPage?.title || ''}
+          selectedBlockContent={selectedBlockContent}
+        />
+      </div>
     </div>
   );
 }

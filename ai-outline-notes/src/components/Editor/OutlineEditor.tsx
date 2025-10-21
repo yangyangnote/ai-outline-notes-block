@@ -460,6 +460,15 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
   return (
     <div className="outline-editor h-full overflow-y-auto p-4 bg-[var(--color-editor-bg)] transition-colors duration-200">
       <div className="max-w-4xl mx-auto">
+        {/* 页面标题 - Logseq 风格 */}
+        {pageTitle && (
+          <div className="mb-8 pt-4">
+            <h1 className="text-3xl font-bold text-[var(--color-text-primary)]">
+              {pageTitle}
+            </h1>
+          </div>
+        )}
+
         {flatTree.map(block => (
           <BlockEditor
             key={block.id}
