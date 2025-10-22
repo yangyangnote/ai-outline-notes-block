@@ -132,3 +132,19 @@ body {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
+
+/* Logseq 风格的箭头淡入淡出动画 */
+@keyframes fadeInArrow {
+  from {
+    opacity: 0;
+    transform: translateX(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.arrow-fade-in {
+  animation: fadeInArrow 150ms ease-out;
+}

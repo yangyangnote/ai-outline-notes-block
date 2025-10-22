@@ -124,6 +124,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const lastSelectionRef = useRef<number | null>(null);
   const [content, setContent] = useState(block.content);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isHoveringBullet, setIsHoveringBullet] = useState(false);
 
   useEffect(() => {
     setContent(block.content);
@@ -518,64 +519,71 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       onDropCapture={handleDrop}
     >
       {/* Logseq 风格的折叠箭头 + 圆点 */}
-      <div className="relative flex items-center flex-shrink-0 mr-1 pt-[7px]">
-        {/* 折叠/展开箭头 - 只在有子节点时显示 */}
-        {hasChildren && (
+      <div
+        className="relative flex items-center flex-shrink-0 pt-[7px]"
+        onMouseEnter={() => setIsHoveringBullet(true)}
+        onMouseLeave={() => setIsHoveringBullet(false)}
+        style={{ width: '32px', marginRight: '4px' }}
+      >
+        {/* 折叠/展开箭头 - 只在有子节点且hover时显示 - 使用绝对定位避免布局抖动 */}
+        <div className="relative w-[32px] h-[18px] flex items-center">
+          {hasChildren && isHoveringBullet && (
+            <button
+              onClick={() => onToggleCollapse(block.id)}
+              className="absolute left-0 w-[14px] h-[18px] flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-sm transition-all duration-150 arrow-fade-in"
+              title={block.collapsed ? '展开' : '折叠'}
+            >
+              {block.collapsed ? (
+                <ChevronRight className="w-2.5 h-2.5 text-gray-500 dark:text-gray-400 transition-transform duration-150" />
+              ) : (
+                <ChevronDown className="w-2.5 h-2.5 text-gray-500 dark:text-gray-400 transition-transform duration-150" />
+              )}
+            </button>
+          )}
+
+          {/* 圆点按钮 - 始终显示 - 使用绝对定位固定在右侧 */}
           <button
-            onClick={() => onToggleCollapse(block.id)}
-            className="w-[14px] h-[18px] flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-sm transition-colors duration-100 mr-0.5"
-            title={block.collapsed ? '展开' : '折叠'}
+            onContextMenu={handleMenuToggle}
+            className="absolute left-[14px] w-[18px] h-[18px] flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-sm transition-colors duration-100"
+            title="右键更多操作"
           >
-            {block.collapsed ? (
-              <ChevronRight className="w-2.5 h-2.5 text-gray-500 dark:text-gray-400" />
+            {hasChildren && block.collapsed ? (
+              // 折叠状态：空心圆环
+              <div
+                className="rounded-full transition-all duration-150 ease-in-out"
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  border: '1.2px solid #cbd5e1',
+                  backgroundColor: 'transparent',
+                }}
+              />
             ) : (
-              <ChevronDown className="w-2.5 h-2.5 text-gray-500 dark:text-gray-400" />
+              // 展开或无子节点：实心小圆点
+              <div
+                className="rounded-full transition-all duration-150 ease-in-out"
+                style={{
+                  width: '4px',
+                  height: '4px',
+                  backgroundColor: '#cbd5e1',
+                }}
+              />
+            )}
+            {isMenuOpen && (
+              <div className="absolute left-6 top-0 z-20 w-48 rounded-md border border-[var(--color-popover-border)] bg-[var(--color-popover-bg)] py-2 shadow-lg transition-colors duration-200">
+                <div className="px-3 pb-1 text-xs font-medium text-[var(--color-text-secondary)]">块操作</div>
+                <button
+                  type="button"
+                  onClick={handleDeleteConfirm}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] transition-colors duration-200 rounded-md"
+                >
+                  <span>删除选定块</span>
+                  <span className="text-xs text-[var(--color-text-muted)]">Delete</span>
+                </button>
+              </div>
             )}
           </button>
-        )}
-
-        {/* 圆点按钮 - 始终显示 */}
-        <button
-          onContextMenu={handleMenuToggle}
-          className="w-[18px] h-[18px] flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-sm transition-colors duration-100 relative"
-          title="右键更多操作"
-        >
-          {hasChildren && block.collapsed ? (
-            // 折叠状态：空心圆环 - 更细的边框，稍大一点
-            <div
-              className="rounded-full transition-all duration-150 ease-in-out"
-              style={{
-                width: '6px',
-                height: '6px',
-                border: '1.2px solid #cbd5e1',
-                backgroundColor: 'transparent',
-              }}
-            />
-          ) : (
-            // 展开或无子节点：实心小圆点 - 稍微淡一点的颜色
-            <div
-              className="rounded-full transition-all duration-150 ease-in-out"
-              style={{
-                width: '4px',
-                height: '4px',
-                backgroundColor: '#cbd5e1',
-              }}
-            />
-          )}
-          {isMenuOpen && (
-            <div className="absolute left-6 top-0 z-20 w-48 rounded-md border border-[var(--color-popover-border)] bg-[var(--color-popover-bg)] py-2 shadow-lg transition-colors duration-200">
-              <div className="px-3 pb-1 text-xs font-medium text-[var(--color-text-secondary)]">块操作</div>
-              <button
-                type="button"
-                onClick={handleDeleteConfirm}
-                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] transition-colors duration-200 rounded-md"
-              >
-                <span>删除选定块</span>
-                <span className="text-xs text-[var(--color-text-muted)]">Delete</span>
-              </button>
-            </div>
-          )}
-        </button>
+        </div>
       </div>
 
       {/* 块内容编辑器 */}
