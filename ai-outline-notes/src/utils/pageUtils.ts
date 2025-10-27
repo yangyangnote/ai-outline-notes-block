@@ -1,7 +1,14 @@
 // 页面操作工具函数
 import { db } from '../db/database';
 import { getSyncEngine } from '../lib/syncEngine';
-import type { Page, PageVisit } from '../types';
+import type {
+  Block,
+  Page,
+  PageVisit,
+  ReferenceBreadcrumb,
+  ReferenceEntry,
+  ReferenceGroup,
+} from '../types';
 
 // 触发页面同步到文件系统
 async function triggerPageSync(pageId: string): Promise<void> {
@@ -204,6 +211,185 @@ export function extractPageLinks(content: string): string[] {
   return links;
 }
 
+const normalizeTitle = (title: string): string => title.trim().toLocaleLowerCase();
+
+const titlesMatch = (a: string, b: string): boolean => normalizeTitle(a) === normalizeTitle(b);
+
+const condenseContent = (content: string): string => {
+  const condensed = content.replace(/\s+/g, ' ').trim();
+  if (condensed.length <= 140) {
+    return condensed;
+  }
+  return condensed.slice(0, 137) + '…';
+};
+
+const buildBreadcrumbs = (
+  block: Block,
+  blockMap: Map<string, Block>
+): ReferenceBreadcrumb[] => {
+  const breadcrumbs: ReferenceBreadcrumb[] = [];
+  let current = block;
+
+  while (current.parentId) {
+    const parent = blockMap.get(current.parentId);
+    if (!parent) {
+      break;
+    }
+
+    breadcrumbs.push({
+      blockId: parent.id,
+      content: condenseContent(parent.content),
+    });
+
+    current = parent;
+  }
+
+  return breadcrumbs.reverse();
+};
+
+const createReferenceEntry = (
+  block: Block,
+  blockMap: Map<string, Block>,
+  page: Page
+): ReferenceEntry => ({
+  blockId: block.id,
+  blockContent: block.content,
+  pageId: page.id,
+  pageTitle: page.title,
+  breadcrumbs: buildBreadcrumbs(block, blockMap),
+  updatedAt: block.updatedAt,
+});
+
+export async function getLinkedReferences(
+  pageId: string,
+  pageTitle: string
+): Promise<ReferenceGroup[]> {
+  const normalized = pageTitle.trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const [allBlocks, allPages] = await Promise.all([
+    db.blocks.toArray(),
+    db.pages.toArray(),
+  ]);
+
+  const blockMap = new Map(allBlocks.map(block => [block.id, block]));
+  const pageMap = new Map(allPages.map(page => [page.id, page]));
+  const groups = new Map<string, ReferenceGroup>();
+
+  for (const block of allBlocks) {
+    if (block.pageId === pageId) {
+      continue;
+    }
+
+    const links = extractPageLinks(block.content)
+      .map(link => link.trim())
+      .filter(Boolean);
+
+    if (!links.some(link => titlesMatch(link, normalized))) {
+      continue;
+    }
+
+    const sourcePage = pageMap.get(block.pageId);
+    if (!sourcePage) {
+      continue;
+    }
+
+    const existingGroup = groups.get(block.pageId);
+    if (existingGroup) {
+      existingGroup.blocks.push(createReferenceEntry(block, blockMap, sourcePage));
+      continue;
+    }
+
+    groups.set(block.pageId, {
+      pageId: sourcePage.id,
+      pageTitle: sourcePage.title,
+      blocks: [createReferenceEntry(block, blockMap, sourcePage)],
+    });
+  }
+
+  const orderedGroups = Array.from(groups.values());
+
+  for (const group of orderedGroups) {
+    group.blocks.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  orderedGroups.sort((a, b) => a.pageTitle.localeCompare(b.pageTitle, 'zh-CN'));
+
+  return orderedGroups;
+}
+
+const WIKILINK_PATTERN = /\[\[[^\]]+\]\]/g;
+
+export async function getUnlinkedReferences(
+  pageId: string,
+  pageTitle: string
+): Promise<ReferenceGroup[]> {
+  const normalized = pageTitle.trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const loweredTitle = normalizeTitle(normalized);
+  const [allBlocks, allPages] = await Promise.all([
+    db.blocks.toArray(),
+    db.pages.toArray(),
+  ]);
+
+  const blockMap = new Map(allBlocks.map(block => [block.id, block]));
+  const pageMap = new Map(allPages.map(page => [page.id, page]));
+  const groups = new Map<string, ReferenceGroup>();
+
+  for (const block of allBlocks) {
+    if (block.pageId === pageId) {
+      continue;
+    }
+
+    const rawLinks = extractPageLinks(block.content)
+      .map(link => link.trim())
+      .filter(Boolean);
+
+    if (rawLinks.some(link => titlesMatch(link, normalized))) {
+      continue;
+    }
+
+    const contentWithoutLinks = block.content.replace(WIKILINK_PATTERN, ' ');
+    const loweredContent = contentWithoutLinks.toLocaleLowerCase();
+
+    if (!loweredContent.includes(loweredTitle)) {
+      continue;
+    }
+
+    const sourcePage = pageMap.get(block.pageId);
+    if (!sourcePage) {
+      continue;
+    }
+
+    const existingGroup = groups.get(block.pageId);
+    if (existingGroup) {
+      existingGroup.blocks.push(createReferenceEntry(block, blockMap, sourcePage));
+      continue;
+    }
+
+    groups.set(block.pageId, {
+      pageId: sourcePage.id,
+      pageTitle: sourcePage.title,
+      blocks: [createReferenceEntry(block, blockMap, sourcePage)],
+    });
+  }
+
+  const orderedGroups = Array.from(groups.values());
+
+  for (const group of orderedGroups) {
+    group.blocks.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  orderedGroups.sort((a, b) => a.pageTitle.localeCompare(b.pageTitle, 'zh-CN'));
+
+  return orderedGroups;
+}
+
 // 获取反向链接（哪些块引用了当前页面）
 export async function getBacklinks(pageTitle: string): Promise<Array<{
   blockId: string;
@@ -211,23 +397,34 @@ export async function getBacklinks(pageTitle: string): Promise<Array<{
   pageId: string;
   pageTitle: string;
 }>> {
-  const allBlocks = await db.blocks.toArray();
-  const backlinks = [];
-  
-  for (const block of allBlocks) {
-    const links = extractPageLinks(block.content);
-    if (links.includes(pageTitle)) {
-      const page = await db.pages.get(block.pageId);
-      if (page) {
-        backlinks.push({
-          blockId: block.id,
-          blockContent: block.content,
-          pageId: block.pageId,
-          pageTitle: page.title,
-        });
-      }
+  const normalized = pageTitle.trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const page = await db.pages.where('title').equals(normalized).first();
+  if (!page) {
+    return [];
+  }
+
+  const groups = await getLinkedReferences(page.id, page.title);
+  const flattened: Array<{
+    blockId: string;
+    blockContent: string;
+    pageId: string;
+    pageTitle: string;
+  }> = [];
+
+  for (const group of groups) {
+    for (const block of group.blocks) {
+      flattened.push({
+        blockId: block.blockId,
+        blockContent: block.blockContent,
+        pageId: group.pageId,
+        pageTitle: group.pageTitle,
+      });
     }
   }
-  
-  return backlinks;
+
+  return flattened;
 }

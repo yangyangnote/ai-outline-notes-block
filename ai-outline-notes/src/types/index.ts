@@ -20,6 +20,26 @@ export interface Page {
   updatedAt: number;
 }
 
+export interface ReferenceBreadcrumb {
+  blockId: string;
+  content: string;
+}
+
+export interface ReferenceEntry {
+  blockId: string;
+  blockContent: string;
+  pageId: string;
+  pageTitle: string;
+  breadcrumbs: ReferenceBreadcrumb[];
+  updatedAt: number;
+}
+
+export interface ReferenceGroup {
+  pageId: string;
+  pageTitle: string;
+  blocks: ReferenceEntry[];
+}
+
 export interface PageVisit {
   id: string;              // UUID
   pageId: string;          // 访问的页面 ID

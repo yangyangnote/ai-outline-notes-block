@@ -3,17 +3,18 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/database';
 import { BlockEditor } from './BlockEditor';
-import { 
-  createBlock, 
-  updateBlock, 
-  deleteBlock, 
-  indentBlock, 
-  outdentBlock,
+import {
+  createBlock,
+  deleteBlock,
+  ensureLinksForContent,
   getPageBlocks,
+  indentBlock,
+  outdentBlock,
   toggleBlockCollapse,
-  ensureLinksForContent
+  updateBlock
 } from '../../utils/blockUtils';
-import { ensurePageByTitle, extractPageLinks, getBacklinks } from '../../utils/pageUtils';
+import { ensurePageByTitle, extractPageLinks } from '../../utils/pageUtils';
+import { BidirectionalReferences } from './BidirectionalReferences';
 import type { Block } from '../../types';
 
 interface OutlineEditorProps {
@@ -22,7 +23,7 @@ interface OutlineEditorProps {
   onNavigateToPage?: (pageId: string) => void;
 }
 
-export const OutlineEditor: React.FC<OutlineEditorProps> = ({ 
+export const OutlineEditor: React.FC<OutlineEditorProps> = ({
   pageId,
   onBlockSelect,
   onNavigateToPage
@@ -199,12 +200,6 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
 
     return Array.from(links).sort((a, b) => a.localeCompare(b, 'zh-CN'));
   }, [blocks]);
-
-  const backlinks =
-    useLiveQuery(
-      () => (pageTitle ? getBacklinks(pageTitle) : []),
-      [pageTitle]
-    ) ?? [];
 
   // 计算块的层级（通过递归查找父块）
   const getBlockLevel = (block: Block): number => {
@@ -383,86 +378,6 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
     }
   };
 
-  const renderLinkedText = (
-    content: string,
-    keyPrefix: string,
-    highlightTitle?: string
-  ): React.ReactNode => {
-    const regex = /\[\[([^\]]+)\]\]/g;
-    const elements: React.ReactNode[] = [];
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    let segmentIndex = 0;
-
-    while ((match = regex.exec(content)) !== null) {
-      const matchIndex = match.index;
-      const before = content.slice(lastIndex, matchIndex);
-      if (before.length > 0) {
-        elements.push(
-          <span
-            key={`${keyPrefix}-text-${segmentIndex}`}
-            className="whitespace-pre-wrap break-words"
-          >
-            {before}
-          </span>
-        );
-        segmentIndex++;
-      }
-
-      const rawTitle = match[1];
-      const normalizedTitle = rawTitle.trim();
-      const isHighlight =
-        Boolean(highlightTitle) && normalizedTitle === highlightTitle;
-
-      elements.push(
-        <button
-          type="button"
-          key={`${keyPrefix}-link-${segmentIndex}`}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            if (normalizedTitle.length > 0) {
-              void handleLinkClick(normalizedTitle);
-            }
-          }}
-          className={`inline-flex items-center rounded px-1.5 py-0.5 transition-colors duration-200 border border-transparent ${
-            isHighlight
-              ? 'bg-[var(--color-link-hover-bg)] text-[var(--color-link-text)] font-semibold'
-              : 'bg-[var(--color-link-bg)] text-[var(--color-link-text)] hover:bg-[var(--color-link-hover-bg)]'
-          }`}
-          title={`跳转到页面：${normalizedTitle || rawTitle || ''}`}
-        >
-          {`[[${normalizedTitle || rawTitle || ''}]]`}
-        </button>
-      );
-      segmentIndex++;
-
-      lastIndex = regex.lastIndex;
-    }
-
-    const after = content.slice(lastIndex);
-    if (after.length > 0) {
-      elements.push(
-        <span
-          key={`${keyPrefix}-text-${segmentIndex}-end`}
-          className="whitespace-pre-wrap break-words"
-        >
-          {after}
-        </span>
-      );
-    }
-
-    if (elements.length === 0) {
-      return (
-        <span className="whitespace-pre-wrap break-words">
-          {content}
-        </span>
-      );
-    }
-
-    return elements;
-  };
-
   return (
     <div className="outline-editor h-full overflow-y-auto p-4 bg-[var(--color-editor-bg)] transition-colors duration-200">
       <div className="max-w-4xl mx-auto">
@@ -520,34 +435,12 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
             )}
           </section>
 
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-secondary)] mb-3">
-              反向链接
-            </h3>
-            {backlinks.length > 0 ? (
-              <div className="space-y-4">
-                {backlinks.map(backlink => (
-                  <div
-                    key={backlink.blockId}
-                    className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-editor-bg)] p-3 shadow-sm"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => onNavigateToPage?.(backlink.pageId)}
-                      className="text-sm font-medium text-[var(--color-link-text)] hover:underline"
-                    >
-                      {backlink.pageTitle}
-                    </button>
-                    <div className="mt-2 text-sm text-[var(--color-text-primary)] whitespace-pre-wrap break-words">
-                      {renderLinkedText(backlink.blockContent, `backlink-${backlink.blockId}`, pageTitle)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-[var(--color-text-muted)]">暂无反向链接</p>
-            )}
-          </section>
+          <BidirectionalReferences
+            pageId={pageId}
+            pageTitle={pageTitle}
+            onNavigateToPage={onNavigateToPage}
+            onLinkClick={title => void handleLinkClick(title)}
+          />
         </div>
       </div>
     </div>

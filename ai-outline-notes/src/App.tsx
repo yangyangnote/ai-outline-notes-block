@@ -1,6 +1,6 @@
 // 主应用组件
 import { useEffect, useState, useCallback } from 'react';
-import { MessageSquare, Sun, Moon } from 'lucide-react';
+import { MessageSquare, Sun, Moon, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { OutlineEditor } from './components/Editor/OutlineEditor';
 import { AIPanel } from './components/AIPanel/AIPanel';
@@ -10,7 +10,7 @@ import { cleanupDuplicatePages } from './utils/dbMaintenance';
 import { initDevTools } from './utils/devTools';
 import { getVaultHandle, isFileSystemSupported } from './lib/fileSystem';
 import { getSyncEngine } from './lib/syncEngine';
-import { recordPageVisit } from './utils/pageUtils';
+import { recordPageVisit, deletePage } from './utils/pageUtils';
 import type { Page } from './types';
 
 function App() {
@@ -18,6 +18,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page | null>(null);
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
   const [selectedBlockContent, setSelectedBlockContent] = useState<string>('');
+  const [isPageMenuOpen, setIsPageMenuOpen] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [vaultHandle, setVaultHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [isLoadingVault, setIsLoadingVault] = useState(true);
@@ -45,6 +46,10 @@ function App() {
     root.classList.add(themeClass);
     localStorage.setItem('things-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    setIsPageMenuOpen(false);
+  }, [currentPageId]);
 
   // 检查并加载已保存的 vault
   useEffect(() => {
@@ -146,6 +151,38 @@ function App() {
     setIsInitialized(false);
   }, []);
 
+  const handleDeleteCurrentPage = useCallback(async () => {
+    if (!currentPageId || !currentPage) {
+      return;
+    }
+
+    const confirmMessage = `确定要删除页面「${currentPage.title}」吗？\n\n此操作将删除该页面及其所有内容，且无法撤销。`;
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      const deletedPageId = currentPageId;
+      await deletePage(deletedPageId);
+      setIsPageMenuOpen(false);
+      setSelectedBlockContent('');
+
+      const remainingPages = await db.pages.orderBy('updatedAt').reverse().toArray();
+      const nextPage = remainingPages.find(page => page.id !== deletedPageId);
+
+      if (nextPage) {
+        setCurrentPageId(nextPage.id);
+      } else {
+        setCurrentPageId(null);
+        setCurrentPage(null);
+      }
+    } catch (error) {
+      console.error('删除页面失败:', error);
+      alert('删除页面失败，请重试');
+    }
+  }, [currentPageId, currentPage]);
+
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
@@ -199,6 +236,36 @@ function App() {
               <Moon className="w-4 h-4 text-[var(--color-text-secondary)]" />
             )}
           </button>
+
+          {currentPage && (
+            <div className="relative">
+              <button
+                onClick={() => setIsPageMenuOpen(prev => !prev)}
+                className="flex items-center justify-center w-8 h-8 rounded-md hover:bg-[var(--color-button-hover)] transition-colors duration-200"
+                title="页面操作"
+              >
+                <MoreHorizontal className="w-4 h-4 text-[var(--color-text-secondary)]" />
+              </button>
+
+              {isPageMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsPageMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 top-10 z-50 w-48 rounded-md border border-[var(--color-popover-border)] bg-[var(--color-popover-bg)] py-2 shadow-lg transition-colors duration-200">
+                    <button
+                      onClick={handleDeleteCurrentPage}
+                      className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] transition-colors duration-200"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>删除页面</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <button
             onClick={() => setIsAIPanelOpen(!isAIPanelOpen)}

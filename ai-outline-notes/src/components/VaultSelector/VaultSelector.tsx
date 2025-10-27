@@ -7,6 +7,7 @@ import {
   isFileSystemSupported,
   requestVaultAccess,
   saveVaultHandle,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getVaultName,
 } from '../../lib/fileSystem';
 import { initializeVaultStructure } from '../../utils/fileOperations';
