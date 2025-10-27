@@ -141,23 +141,24 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
     };
   }, [liveBlocks, pageId, onBlockSelect, focusBlockTextarea]);
 
-  useEffect(() => {
-    if (blocks.length === 0) {
-      return;
-    }
+  // 注释掉自动选中第一个块的逻辑，避免第一个块自动进入编辑模式
+  // useEffect(() => {
+  //   if (blocks.length === 0) {
+  //     return;
+  //   }
 
-    if (selectedBlockId && blocks.some(block => block.id === selectedBlockId)) {
-      return;
-    }
+  //   if (selectedBlockId && blocks.some(block => block.id === selectedBlockId)) {
+  //     return;
+  //   }
 
-    const firstBlock = blocks[0];
-    setSelectedBlockId(firstBlock.id);
-    if (onBlockSelect) {
-      onBlockSelect(firstBlock.id, firstBlock.content);
-    }
-    pendingFocusRef.current = { blockId: firstBlock.id };
-    focusBlockTextarea(firstBlock.id);
-  }, [blocks, selectedBlockId, onBlockSelect, focusBlockTextarea]);
+  //   const firstBlock = blocks[0];
+  //   setSelectedBlockId(firstBlock.id);
+  //   if (onBlockSelect) {
+  //     onBlockSelect(firstBlock.id, firstBlock.content);
+  //   }
+  //   pendingFocusRef.current = { blockId: firstBlock.id };
+  //   focusBlockTextarea(firstBlock.id);
+  // }, [blocks, selectedBlockId, onBlockSelect, focusBlockTextarea]);
 
   useEffect(() => {
     if (!selectedBlockId) {
