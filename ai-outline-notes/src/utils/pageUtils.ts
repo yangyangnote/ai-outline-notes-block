@@ -1,7 +1,7 @@
 // 页面操作工具函数
 import { db } from '../db/database';
 import { getSyncEngine } from '../lib/syncEngine';
-import type { Page } from '../types';
+import type { Page, PageVisit } from '../types';
 
 // 触发页面同步到文件系统
 async function triggerPageSync(pageId: string): Promise<void> {
@@ -15,6 +15,57 @@ async function triggerPageSync(pageId: string): Promise<void> {
   } catch (error) {
     console.warn('同步触发失败:', error);
   }
+}
+
+// 记录页面访问历史
+export async function recordPageVisit(pageId: string): Promise<void> {
+  const now = Date.now();
+  const visit: PageVisit = {
+    id: crypto.randomUUID(),
+    pageId,
+    visitedAt: now,
+  };
+
+  await db.pageVisits.add(visit);
+
+  // 清理旧的访问记录（保留最近 100 条）
+  const allVisits = await db.pageVisits.orderBy('visitedAt').reverse().toArray();
+  if (allVisits.length > 100) {
+    const visitsToDelete = allVisits.slice(100);
+    await db.pageVisits.bulkDelete(visitsToDelete.map(v => v.id));
+  }
+}
+
+// 获取最近访问的页面（去重）
+export async function getRecentPages(limit: number = 10): Promise<Page[]> {
+  // 获取所有访问记录，按时间倒序
+  const visits = await db.pageVisits.orderBy('visitedAt').reverse().toArray();
+
+  // 去重，保留每个页面最近的一次访问
+  const seenPageIds = new Set<string>();
+  const uniqueVisits: PageVisit[] = [];
+
+  for (const visit of visits) {
+    if (!seenPageIds.has(visit.pageId)) {
+      seenPageIds.add(visit.pageId);
+      uniqueVisits.push(visit);
+
+      if (uniqueVisits.length >= limit) {
+        break;
+      }
+    }
+  }
+
+  // 根据访问记录获取页面信息
+  const pages: Page[] = [];
+  for (const visit of uniqueVisits) {
+    const page = await db.pages.get(visit.pageId);
+    if (page) {
+      pages.push(page);
+    }
+  }
+
+  return pages;
 }
 
 // 创建新页面

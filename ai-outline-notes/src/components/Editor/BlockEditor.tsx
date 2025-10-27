@@ -126,9 +126,12 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isHoveringBullet, setIsHoveringBullet] = useState(false);
 
+  // 只在 block 改变且不是当前选中的块时，才同步外部内容
   useEffect(() => {
-    setContent(block.content);
-  }, [block.content]);
+    if (!isSelected && block.content !== content) {
+      setContent(block.content);
+    }
+  }, [block.content, isSelected, content]);
 
   useLayoutEffect(() => {
     if (!isSelected || !textareaRef.current) {
@@ -138,20 +141,26 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     const textarea = textareaRef.current;
     textarea.focus();
 
+    // 如果有待处理的光标位置，使用它
     const pending = pendingCursorRef.current;
-    pendingCursorRef.current = null;
+    if (pending !== null) {
+      pendingCursorRef.current = null;
+      const clamped = Math.max(0, Math.min(pending, textarea.value.length));
+      textarea.setSelectionRange(clamped, clamped);
+      return;
+    }
 
+    // 否则使用上次保存的光标位置
     const fallback = lastSelectionRef.current;
-    const cursorPosition =
-      typeof pending === 'number'
-        ? pending
-        : typeof fallback === 'number'
-          ? fallback
-          : textarea.value.length;
+    if (fallback !== null) {
+      const clamped = Math.max(0, Math.min(fallback, textarea.value.length));
+      textarea.setSelectionRange(clamped, clamped);
+      return;
+    }
 
-    const clamped = Math.max(0, Math.min(cursorPosition, textarea.value.length));
-    textarea.setSelectionRange(clamped, clamped);
-  }, [isSelected]);
+    // 最后才是默认到末尾
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }, [isSelected]); // 只依赖 isSelected
 
   // 自动调整 textarea 高度
   useEffect(() => {
@@ -186,6 +195,16 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   }, [isMenuOpen]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Escape: 退出编辑模式
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.blur();
+      }
+      return;
+    }
+
     // Tab: 缩进
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -231,6 +250,27 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
+    const cursorPosition = e.target.selectionStart;
+
+    // 保存当前光标位置
+    lastSelectionRef.current = cursorPosition;
+
+    // 立即更新本地状态
+    setContent(newContent);
+
+    // 异步更新数据库（不等待结果）
+    onUpdate(block.id, newContent);
+  };
+
+  const handleCompositionStart = () => {
+    // 中文输入法开始
+  };
+
+  const handleCompositionEnd = (e: React.CompositionEvent<HTMLTextAreaElement>) => {
+    // 中文输入法结束，确保更新内容
+    const newContent = e.currentTarget.value;
+    const cursorPosition = e.currentTarget.selectionStart;
+    lastSelectionRef.current = cursorPosition;
     setContent(newContent);
     onUpdate(block.id, newContent);
   };
@@ -442,11 +482,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const renderDisplayContent = (): React.ReactNode => {
     const trimmed = block.content.trim();
     if (trimmed.length === 0) {
-      return (
-        <span className="text-[var(--color-text-muted)] italic">
-          点击开始输入...
-        </span>
-      );
+      // 返回一个零宽字符以保持布局，但不显示任何文字
+      return <span className="opacity-0">&nbsp;</span>;
     }
 
     const regex = /\[\[([^\]]+)\]\]/g;
@@ -613,6 +650,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             data-block-textarea={block.id}
             value={content}
             onChange={handleChange}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
             onKeyDown={handleKeyDown}
             onMouseUp={handleTextareaMouseUp}
             onTouchEnd={handleTextareaTouchEnd}

@@ -10,6 +10,7 @@ import { cleanupDuplicatePages } from './utils/dbMaintenance';
 import { initDevTools } from './utils/devTools';
 import { getVaultHandle, isFileSystemSupported } from './lib/fileSystem';
 import { getSyncEngine } from './lib/syncEngine';
+import { recordPageVisit } from './utils/pageUtils';
 import type { Page } from './types';
 
 function App() {
@@ -121,6 +122,10 @@ function App() {
       db.pages.get(currentPageId).then(page => {
         if (page) {
           setCurrentPage(page);
+          // 记录页面访问历史
+          recordPageVisit(currentPageId).catch(err => {
+            console.error('记录页面访问失败:', err);
+          });
         }
       });
     }

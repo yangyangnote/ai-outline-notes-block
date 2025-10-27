@@ -20,6 +20,12 @@ export interface Page {
   updatedAt: number;
 }
 
+export interface PageVisit {
+  id: string;              // UUID
+  pageId: string;          // 访问的页面 ID
+  visitedAt: number;       // 访问时间戳
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';

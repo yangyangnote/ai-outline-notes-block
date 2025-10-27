@@ -1,12 +1,13 @@
 // IndexedDB 数据库配置（使用 Dexie）
 import Dexie, { type EntityTable } from 'dexie';
-import type { Block, Page, ChatMessage, AIConversation } from '../types';
+import type { Block, Page, ChatMessage, AIConversation, PageVisit } from '../types';
 
 class NotesDatabase extends Dexie {
   blocks!: EntityTable<Block, 'id'>;
   pages!: EntityTable<Page, 'id'>;
   chatMessages!: EntityTable<ChatMessage, 'id'>;
   conversations!: EntityTable<AIConversation, 'id'>;
+  pageVisits!: EntityTable<PageVisit, 'id'>;
 
   constructor() {
     super('NotesDatabase');
@@ -50,6 +51,15 @@ class NotesDatabase extends Dexie {
         }
       }
       console.log('数据库升级到版本 3：已为页面添加 isReference 标记');
+    });
+
+    // 版本 4：添加页面访问历史表
+    this.version(4).stores({
+      blocks: 'id, pageId, parentId, order, collapsed, createdAt, updatedAt',
+      pages: 'id, title, type, isReference, createdAt, updatedAt',
+      chatMessages: 'id, pageId, createdAt',
+      conversations: 'id, pageId, createdAt, updatedAt',
+      pageVisits: 'id, pageId, visitedAt, [pageId+visitedAt]'
     });
   }
 }

@@ -1,9 +1,9 @@
 // 侧边栏 - 页面列表
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FileText, Plus, Calendar, Search, Folder, RefreshCw, Settings } from 'lucide-react';
+import { FileText, Plus, Calendar, Search, Folder, RefreshCw, Settings, Clock } from 'lucide-react';
 import { db } from '../../db/database';
-import { createPage, getTodayDaily } from '../../utils/pageUtils';
+import { createPage, getTodayDaily, getRecentPages } from '../../utils/pageUtils';
 import { getVaultHandle, getVaultName, clearVaultHandle, isFileSystemSupported } from '../../lib/fileSystem';
 import { getSyncEngine } from '../../lib/syncEngine';
 import type { SyncState } from '../../lib/syncEngine';
@@ -48,6 +48,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // 实时查询所有页面
   const pages = useLiveQuery(
     () => db.pages.orderBy('updatedAt').reverse().toArray(),
+    []
+  );
+
+  // 实时查询最近访问的页面
+  const recentPages = useLiveQuery(
+    async () => {
+      const pages = await getRecentPages(5);
+      return pages;
+    },
     []
   );
 
@@ -110,7 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-2 border-b border-[var(--color-border-strong)] space-y-1">
         <button
           onClick={handleOpenToday}
-          className="w-full flex items-center gap-2 px-3 py-2 text-left text-[var(--color-text-primary)] 
+          className="w-full flex items-center gap-2 px-3 py-2 text-left text-[var(--color-text-primary)]
                    hover:bg-[var(--color-sidebar-hover)] rounded-md transition-colors duration-200"
         >
           <Calendar className="w-4 h-4" />
@@ -119,13 +128,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <button
           onClick={handleCreatePage}
-          className="w-full flex items-center gap-2 px-3 py-2 text-left text-[var(--color-text-primary)] 
+          className="w-full flex items-center gap-2 px-3 py-2 text-left text-[var(--color-text-primary)]
                    hover:bg-[var(--color-sidebar-hover)] rounded-md transition-colors duration-200"
         >
           <Plus className="w-4 h-4" />
           <span className="text-sm">新建页面</span>
         </button>
       </div>
+
+      {/* 最近使用 */}
+      {recentPages && recentPages.length > 0 && (
+        <div className="p-2 border-b border-[var(--color-border-strong)]">
+          <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide">
+            <Clock className="w-3 h-3" />
+            <span>最近使用</span>
+          </div>
+          <div className="space-y-1">
+            {recentPages.map(page => (
+              <button
+                key={page.id}
+                onClick={() => onPageSelect(page.id)}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-md
+                         transition-colors duration-200 group ${
+                  currentPageId === page.id
+                    ? 'bg-[var(--color-list-active-bg)] text-[var(--color-list-active-text)]'
+                    : 'text-[var(--color-text-primary)] hover:bg-[var(--color-sidebar-hover)]'
+                }`}
+              >
+                {page.type === 'daily' ? (
+                  <Calendar className="w-4 h-4 flex-shrink-0" />
+                ) : (
+                  <FileText className="w-4 h-4 flex-shrink-0" />
+                )}
+                <span className="text-sm truncate flex-1">{page.title}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 页面列表 */}
       <div className="flex-1 overflow-y-auto p-2">
