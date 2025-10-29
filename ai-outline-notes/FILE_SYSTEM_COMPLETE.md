@@ -585,4 +585,3 @@ devTools.importFromFiles()
 ---
 
 _Made with ❤️ for local-first note-taking_
-

@@ -15,6 +15,7 @@ declare global {
       deleteEmptyBlocks: () => Promise<void>;
       migrateToFiles: () => Promise<void>;
       importFromFiles: () => Promise<void>;
+      keepOnlyPage: (pageTitle: string) => Promise<void>;
     };
   }
 }
@@ -108,15 +109,83 @@ async function importFromFiles() {
   }
 
   console.log('🔄 开始从文件系统导入数据...');
-  
+
   await importFromFileSystem(vaultHandle, {
     clearExisting: true,
     onProgress: (current, total) => {
       console.log(`📝 进度: ${current}/${total}`);
     },
   });
-  
+
   console.log('✅ 导入完成！');
+  window.location.reload();
+}
+
+// 只保留指定页面，删除其他所有数据
+async function keepOnlyPage(pageTitle: string) {
+  console.log(`🔍 查找页面: "${pageTitle}"...`);
+
+  // 查找目标页面
+  const targetPage = await db.pages
+    .filter(p => p.title === pageTitle)
+    .first();
+
+  if (!targetPage) {
+    console.error(`❌ 找不到页面 "${pageTitle}"`);
+    const allPages = await db.pages.toArray();
+    console.log('📄 当前所有页面：');
+    allPages.forEach(p => console.log(`  - ${p.title}`));
+    return;
+  }
+
+  console.log(`✅ 找到页面: ${targetPage.title} (ID: ${targetPage.id})`);
+
+  // 获取要删除的其他页面
+  const pagesToDelete = await db.pages
+    .filter(p => p.id !== targetPage.id)
+    .toArray();
+
+  console.log(`🗑️  将删除 ${pagesToDelete.length} 个页面...`);
+
+  // 删除不属于目标页面的所有块
+  const blocksToDelete = await db.blocks
+    .filter(b => b.pageId !== targetPage.id)
+    .toArray();
+
+  console.log(`🗑️  将删除 ${blocksToDelete.length} 个块...`);
+
+  // 开始删除
+  await db.transaction('rw', db.pages, db.blocks, db.chatMessages, db.conversations, db.pageVisits, async () => {
+    // 删除其他页面的块
+    for (const block of blocksToDelete) {
+      await db.blocks.delete(block.id);
+    }
+
+    // 删除其他页面
+    for (const page of pagesToDelete) {
+      await db.pages.delete(page.id);
+    }
+
+    // 删除不属于目标页面的聊天记录
+    await db.chatMessages
+      .filter(m => m.pageId !== targetPage.id)
+      .delete();
+
+    // 删除不属于目标页面的对话
+    await db.conversations
+      .filter(c => c.pageId !== targetPage.id)
+      .delete();
+
+    // 删除不属于目标页面的访问历史
+    await db.pageVisits
+      .filter(v => v.pageId !== targetPage.id)
+      .delete();
+  });
+
+  console.log('✅ 清理完成！');
+  console.log(`📄 保留的页面: ${targetPage.title}`);
+
+  // 刷新页面
   window.location.reload();
 }
 
@@ -130,8 +199,9 @@ export function initDevTools() {
     deleteEmptyBlocks: deleteEmptyBlocks,
     migrateToFiles: migrateToFiles,
     importFromFiles: importFromFiles,
+    keepOnlyPage: keepOnlyPage,
   };
-  
+
   console.log('🛠️ 开发工具已加载！使用以下命令：');
   console.log('  - devTools.stats()          查看数据库统计');
   console.log('  - devTools.cleanup()        清理重复页面和空块');
@@ -139,6 +209,7 @@ export function initDevTools() {
   console.log('  - devTools.export()         导出 JSON 备份');
   console.log('  - devTools.migrateToFiles() 迁移数据到文件系统');
   console.log('  - devTools.importFromFiles() 从文件系统导入数据');
+  console.log('  - devTools.keepOnlyPage("页面名")  只保留指定页面，删除其他数据');
   console.log('  - devTools.reset()          清除所有数据（慎用！）');
 }
 

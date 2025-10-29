@@ -1,6 +1,8 @@
 // 页面操作工具函数
 import { db } from '../db/database';
 import { getSyncEngine } from '../lib/syncEngine';
+import { getVaultHandle } from '../lib/fileSystem';
+import { deleteFile, getPageDirectory, generateFilename } from './fileOperations';
 import type {
   Block,
   Page,
@@ -147,13 +149,40 @@ export async function updatePageTitle(id: string, title: string): Promise<void> 
   await triggerPageSync(id);
 }
 
-// 删除页面（同时删除所有块）
+// 删除页面（同时删除所有块和对应的文件）
 export async function deletePage(id: string): Promise<void> {
-  // 删除页面的所有块
+  // 先获取页面信息（删除后就拿不到了）
+  const page = await db.pages.get(id);
+
+  // 删除数据库中的数据
   await db.blocks.where({ pageId: id }).delete();
-  
-  // 删除页面
   await db.pages.delete(id);
+
+  // 删除聊天记录和访问历史
+  await db.chatMessages.where({ pageId: id }).delete();
+  await db.conversations.where({ pageId: id }).delete();
+  await db.pageVisits.where({ pageId: id }).delete();
+
+  // 尝试删除文件系统中的文件
+  if (page) {
+    try {
+      const vaultHandle = await getVaultHandle();
+      if (vaultHandle) {
+        const dirName = getPageDirectory(page);
+        const filename = generateFilename(page);
+
+        // 获取对应的目录
+        const dirHandle = await vaultHandle.getDirectoryHandle(dirName, { create: false });
+
+        // 删除文件
+        await deleteFile(dirHandle, filename);
+        console.log(`✅ 已删除文件: ${dirName}/${filename}`);
+      }
+    } catch (error) {
+      // 文件可能不存在或其他错误，仅记录警告
+      console.warn('删除文件时出错（可能文件不存在）:', error);
+    }
+  }
 }
 
 // 获取所有页面
