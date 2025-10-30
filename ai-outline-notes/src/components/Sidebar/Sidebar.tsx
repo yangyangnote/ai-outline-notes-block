@@ -1,7 +1,7 @@
 // 侧边栏 - 页面列表
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FileText, Plus, Calendar, Folder, RefreshCw, Settings, Clock } from 'lucide-react';
+import { FileText, Plus, Calendar, Folder, RefreshCw, Settings, Clock, List } from 'lucide-react';
 import { db } from '../../db/database';
 import { createPage, getTodayDaily, getRecentPages } from '../../utils/pageUtils';
 import { getVaultHandle, getVaultName, clearVaultHandle, isFileSystemSupported } from '../../lib/fileSystem';
@@ -11,11 +11,15 @@ import type { SyncState } from '../../lib/syncEngine';
 interface SidebarProps {
   currentPageId: string | null;
   onPageSelect: (pageId: string) => void;
+  onViewChange?: (view: 'editor' | 'allPages') => void;
+  currentView?: 'editor' | 'allPages';
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentPageId,
   onPageSelect,
+  onViewChange,
+  currentView = 'editor',
 }) => {
   const [vaultName, setVaultName] = useState<string>('');
   const [syncState, setSyncState] = useState<SyncState | null>(null);
@@ -44,17 +48,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, []);
 
-  // 实时查询所有页面
-  const pages = useLiveQuery(
-    () => db.pages.orderBy('updatedAt').reverse().toArray(),
-    []
-  );
-
-  // 实时查询最近访问的页面
+  // 实时查询最近访问的页面（添加 currentPageId 作为依赖，确保切换页面时更新）
   const recentPages = useLiveQuery(
     async () => {
       const pages = await getRecentPages(5);
       return pages;
+    },
+    [currentPageId]
+  );
+
+  // 实时查询总页面数（用于底部显示）
+  const totalPagesCount = useLiveQuery(
+    async () => {
+      const allPages = await db.pages.toArray();
+      const nonReferencePages = allPages.filter(page => !page.isReference);
+      return nonReferencePages.length;
     },
     []
   );
@@ -93,7 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div className="w-64 h-full bg-[var(--color-sidebar-bg)] border-r border-[var(--color-border-strong)] flex flex-col transition-colors duration-200">
       {/* 头部 */}
       <div className="p-4 border-b border-[var(--color-border-strong)]">
-        <h1 className="text-xl font-bold text-[var(--color-text-primary)] mb-4">AI 大纲笔记</h1>
+        <h1 className="text-xl font-bold text-[var(--color-text-primary)]">AI 大纲笔记</h1>
       </div>
 
       {/* 快捷操作 */}
@@ -114,6 +122,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <Plus className="w-4 h-4" />
           <span className="text-sm">新建页面</span>
+        </button>
+
+        <button
+          onClick={() => onViewChange?.('allPages')}
+          className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-md transition-colors duration-200 ${
+            currentView === 'allPages'
+              ? 'bg-[var(--color-list-active-bg)] text-[var(--color-list-active-text)]'
+              : 'text-[var(--color-text-primary)] hover:bg-[var(--color-sidebar-hover)]'
+          }`}
+        >
+          <List className="w-4 h-4" />
+          <span className="text-sm">全部页面</span>
         </button>
       </div>
 
@@ -148,7 +168,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
-      <div className="flex-1" />
+      {/* 占位区域 */}
+      <div className="flex-1 overflow-y-auto p-2">
+      </div>
 
       {/* 底部信息 */}
       <div className="p-4 border-t border-[var(--color-border-strong)] space-y-3">
@@ -212,7 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         <div className="text-xs text-[var(--color-text-muted)]">
-          <p>共 {pages?.length || 0} 个页面</p>
+          <p>共 {totalPagesCount || 0} 个页面</p>
         </div>
       </div>
     </div>

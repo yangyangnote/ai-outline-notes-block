@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { MessageSquare, Sun, Moon, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { OutlineEditor } from './components/Editor/OutlineEditor';
+import { AllPagesTab } from './components/PageTabs/AllPagesTab';
 import { AIPanel } from './components/AIPanel/AIPanel';
 import { VaultSelector } from './components/VaultSelector/VaultSelector';
 import { initializeDatabase, db } from './db/database';
@@ -16,6 +17,7 @@ import type { Page } from './types';
 function App() {
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<Page | null>(null);
+  const [viewMode, setViewMode] = useState<'editor' | 'allPages'>('editor');
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
   const [selectedBlockContent, setSelectedBlockContent] = useState<string>('');
   const [isPageMenuOpen, setIsPageMenuOpen] = useState(false);
@@ -158,8 +160,13 @@ function App() {
   const handlePageSelect = useCallback((pageId: string) => {
     setCurrentPageId(pageId);
     setSelectedBlockContent(''); // 切换页面时清空选中内容
+    setViewMode('editor'); // 切换页面时返回编辑器视图
     recordVisit(pageId);
   }, [recordVisit]);
+
+  const handleViewChange = useCallback((view: 'editor' | 'allPages') => {
+    setViewMode(view);
+  }, []);
 
   const handleBlockSelect = useCallback((_blockId: string | null, content: string) => {
     setSelectedBlockContent(content);
@@ -318,11 +325,18 @@ function App() {
         <Sidebar
           currentPageId={currentPageId}
           onPageSelect={handlePageSelect}
+          onViewChange={handleViewChange}
+          currentView={viewMode}
         />
 
-        {/* 主编辑区 */}
+        {/* 主内容区 */}
         <div className="flex-1 overflow-hidden">
-          {currentPageId ? (
+          {viewMode === 'allPages' ? (
+            <AllPagesTab
+              onPageSelect={handlePageSelect}
+              currentPageId={currentPageId}
+            />
+          ) : currentPageId ? (
             <OutlineEditor
               pageId={currentPageId}
               onBlockSelect={handleBlockSelect}

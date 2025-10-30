@@ -481,3 +481,37 @@ export async function getBacklinks(pageTitle: string): Promise<Array<{
 
   return flattened;
 }
+
+// 获取所有页面的反向链接数量
+export async function getBacklinksCount(): Promise<Map<string, number>> {
+  const [allBlocks, allPages] = await Promise.all([
+    db.blocks.toArray(),
+    db.pages.toArray(),
+  ]);
+
+  const pageMap = new Map(allPages.map(page => [page.id, page]));
+  const backlinksCount = new Map<string, number>();
+
+  // 初始化所有页面的计数为 0
+  for (const page of allPages) {
+    backlinksCount.set(page.id, 0);
+  }
+
+  // 遍历所有块，统计引用
+  for (const block of allBlocks) {
+    const links = extractPageLinks(block.content)
+      .map(link => link.trim())
+      .filter(Boolean);
+
+    for (const linkTitle of links) {
+      // 找到被引用的页面
+      const targetPage = allPages.find(p => titlesMatch(p.title, linkTitle));
+      if (targetPage) {
+        const currentCount = backlinksCount.get(targetPage.id) || 0;
+        backlinksCount.set(targetPage.id, currentCount + 1);
+      }
+    }
+  }
+
+  return backlinksCount;
+}
