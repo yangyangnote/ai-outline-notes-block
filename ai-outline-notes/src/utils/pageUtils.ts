@@ -1,5 +1,5 @@
 // 页面操作工具函数
-import { db } from '../db/database';
+import { db as realDb } from '../db/database';
 import { getSyncEngine } from '../lib/syncEngine';
 import { getVaultHandle } from '../lib/fileSystem';
 import { deleteFile, getPageDirectory, generateFilename } from './fileOperations';
@@ -11,6 +11,17 @@ import type {
   ReferenceEntry,
   ReferenceGroup,
 } from '../types';
+
+let dbInstance = realDb;
+
+// 测试环境可以通过这些函数注入或还原数据库实例
+export function __setPageUtilsDb(testDb: typeof realDb): void {
+  dbInstance = testDb;
+}
+
+export function __resetPageUtilsDb(): void {
+  dbInstance = realDb;
+}
 
 // 触发页面同步到文件系统
 async function triggerPageSync(pageId: string): Promise<void> {
@@ -29,26 +40,39 @@ async function triggerPageSync(pageId: string): Promise<void> {
 // 记录页面访问历史
 export async function recordPageVisit(pageId: string): Promise<void> {
   const now = Date.now();
-  const visit: PageVisit = {
-    id: crypto.randomUUID(),
-    pageId,
-    visitedAt: now,
-  };
+  const existingVisits = await dbInstance.pageVisits.where({ pageId }).toArray();
 
-  await db.pageVisits.add(visit);
+  if (existingVisits.length > 0) {
+    existingVisits.sort((a, b) => b.visitedAt - a.visitedAt);
+    const [latestVisit, ...olderVisits] = existingVisits;
+
+    if (olderVisits.length > 0) {
+      await dbInstance.pageVisits.bulkDelete(olderVisits.map(visit => visit.id));
+    }
+
+    await dbInstance.pageVisits.update(latestVisit.id, { visitedAt: now });
+  } else {
+    const visit: PageVisit = {
+      id: crypto.randomUUID(),
+      pageId,
+      visitedAt: now,
+    };
+
+    await dbInstance.pageVisits.add(visit);
+  }
 
   // 清理旧的访问记录（保留最近 100 条）
-  const allVisits = await db.pageVisits.orderBy('visitedAt').reverse().toArray();
+  const allVisits = await dbInstance.pageVisits.orderBy('visitedAt').reverse().toArray();
   if (allVisits.length > 100) {
     const visitsToDelete = allVisits.slice(100);
-    await db.pageVisits.bulkDelete(visitsToDelete.map(v => v.id));
+    await dbInstance.pageVisits.bulkDelete(visitsToDelete.map(v => v.id));
   }
 }
 
 // 获取最近访问的页面（去重）
 export async function getRecentPages(limit: number = 10): Promise<Page[]> {
   // 获取所有访问记录，按时间倒序
-  const visits = await db.pageVisits.orderBy('visitedAt').reverse().toArray();
+  const visits = await dbInstance.pageVisits.orderBy('visitedAt').reverse().toArray();
 
   // 去重，保留每个页面最近的一次访问
   const seenPageIds = new Set<string>();
@@ -68,7 +92,7 @@ export async function getRecentPages(limit: number = 10): Promise<Page[]> {
   // 根据访问记录获取页面信息
   const pages: Page[] = [];
   for (const visit of uniqueVisits) {
-    const page = await db.pages.get(visit.pageId);
+    const page = await dbInstance.pages.get(visit.pageId);
     if (page) {
       pages.push(page);
     }
@@ -95,7 +119,7 @@ export async function createPage(
     updatedAt: now,
   };
   
-  await db.pages.add(page);
+  await dbInstance.pages.add(page);
   
   // 触发同步到文件系统
   await triggerPageSync(page.id);
@@ -110,7 +134,7 @@ export async function getPageByTitle(title: string): Promise<Page | undefined> {
     return undefined;
   }
 
-  return await db.pages.where('title').equals(normalized).first();
+  return await dbInstance.pages.where('title').equals(normalized).first();
 }
 
 // 确保页面存在（若不存在则创建）
@@ -129,8 +153,8 @@ export async function ensurePageByTitle(
   const existing = await getPageByTitle(normalized);
   if (existing) {
     if (options?.isReference === false && existing.isReference) {
-      await db.pages.update(existing.id, { isReference: false, updatedAt: Date.now() });
-      return await db.pages.get(existing.id) ?? existing;
+      await dbInstance.pages.update(existing.id, { isReference: false, updatedAt: Date.now() });
+      return await dbInstance.pages.get(existing.id) ?? existing;
     }
     return existing;
   }
@@ -140,7 +164,7 @@ export async function ensurePageByTitle(
 
 // 更新页面标题
 export async function updatePageTitle(id: string, title: string): Promise<void> {
-  await db.pages.update(id, {
+  await dbInstance.pages.update(id, {
     title,
     updatedAt: Date.now(),
   });
@@ -152,16 +176,16 @@ export async function updatePageTitle(id: string, title: string): Promise<void> 
 // 删除页面（同时删除所有块和对应的文件）
 export async function deletePage(id: string): Promise<void> {
   // 先获取页面信息（删除后就拿不到了）
-  const page = await db.pages.get(id);
+  const page = await dbInstance.pages.get(id);
 
   // 删除数据库中的数据
-  await db.blocks.where({ pageId: id }).delete();
-  await db.pages.delete(id);
+  await dbInstance.blocks.where({ pageId: id }).delete();
+  await dbInstance.pages.delete(id);
 
   // 删除聊天记录和访问历史
-  await db.chatMessages.where({ pageId: id }).delete();
-  await db.conversations.where({ pageId: id }).delete();
-  await db.pageVisits.where({ pageId: id }).delete();
+  await dbInstance.chatMessages.where({ pageId: id }).delete();
+  await dbInstance.conversations.where({ pageId: id }).delete();
+  await dbInstance.pageVisits.where({ pageId: id }).delete();
 
   // 尝试删除文件系统中的文件
   if (page) {
@@ -187,12 +211,12 @@ export async function deletePage(id: string): Promise<void> {
 
 // 获取所有页面
 export async function getAllPages(): Promise<Page[]> {
-  return await db.pages.orderBy('updatedAt').reverse().toArray();
+  return await dbInstance.pages.orderBy('updatedAt').reverse().toArray();
 }
 
 // 搜索页面
 export async function searchPages(query: string): Promise<Page[]> {
-  const allPages = await db.pages.toArray();
+  const allPages = await dbInstance.pages.toArray();
   const lowerQuery = query.toLowerCase();
   
   return allPages.filter(page => 
@@ -206,7 +230,7 @@ export async function getTodayDaily(): Promise<Page> {
   const title = formatDateTitle(today);
   
   // 查找是否已存在今日日记
-  const existingDaily = await db.pages
+  const existingDaily = await dbInstance.pages
     .where('title')
     .equals(title)
     .first();
@@ -299,8 +323,8 @@ export async function getLinkedReferences(
   }
 
   const [allBlocks, allPages] = await Promise.all([
-    db.blocks.toArray(),
-    db.pages.toArray(),
+    dbInstance.blocks.toArray(),
+    dbInstance.pages.toArray(),
   ]);
 
   const blockMap = new Map(allBlocks.map(block => [block.id, block]));
@@ -362,8 +386,8 @@ export async function getUnlinkedReferences(
 
   const loweredTitle = normalizeTitle(normalized);
   const [allBlocks, allPages] = await Promise.all([
-    db.blocks.toArray(),
-    db.pages.toArray(),
+    dbInstance.blocks.toArray(),
+    dbInstance.pages.toArray(),
   ]);
 
   const blockMap = new Map(allBlocks.map(block => [block.id, block]));
@@ -431,7 +455,7 @@ export async function getBacklinks(pageTitle: string): Promise<Array<{
     return [];
   }
 
-  const page = await db.pages.where('title').equals(normalized).first();
+  const page = await dbInstance.pages.where('title').equals(normalized).first();
   if (!page) {
     return [];
   }

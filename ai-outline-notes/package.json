@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node --test --loader ./ts-test-loader.mjs",
     "preview": "vite preview",
     "electron:dev": "vite",
     "electron:build": "npm run build && electron-builder",
