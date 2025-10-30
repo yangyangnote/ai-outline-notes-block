@@ -1,7 +1,7 @@
 // 侧边栏 - 页面列表
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FileText, Plus, Calendar, Search, Folder, RefreshCw, Settings, Clock } from 'lucide-react';
+import { FileText, Plus, Calendar, Folder, RefreshCw, Settings, Clock } from 'lucide-react';
 import { db } from '../../db/database';
 import { createPage, getTodayDaily, getRecentPages } from '../../utils/pageUtils';
 import { getVaultHandle, getVaultName, clearVaultHandle, isFileSystemSupported } from '../../lib/fileSystem';
@@ -17,7 +17,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentPageId,
   onPageSelect,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
   const [vaultName, setVaultName] = useState<string>('');
   const [syncState, setSyncState] = useState<SyncState | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -60,12 +59,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     []
   );
 
-  const filteredPages = pages
-    ?.filter(page => !page.isReference)
-    .filter(page =>
-      page.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
   const handleCreatePage = async () => {
     const title = prompt('输入页面标题：');
     if (title) {
@@ -101,18 +94,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* 头部 */}
       <div className="p-4 border-b border-[var(--color-border-strong)]">
         <h1 className="text-xl font-bold text-[var(--color-text-primary)] mb-4">AI 大纲笔记</h1>
-
-        {/* 搜索框 */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜索页面..."
-            className="w-full pl-9 pr-3 py-2 border border-[var(--color-input-border)] rounded-md text-sm bg-[var(--color-input-bg)] text-[var(--color-text-primary)] placeholder:text-[var(--color-input-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-soft)] transition-colors duration-200"
-          />
-        </div>
       </div>
 
       {/* 快捷操作 */}
@@ -167,34 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
-      {/* 页面列表 */}
-      <div className="flex-1 overflow-y-auto p-2">
-        {filteredPages?.length === 0 ? (
-          <div className="text-center text-[var(--color-text-muted)] text-sm mt-4">
-            {searchQuery ? '没有找到匹配的页面' : '还没有页面'}
-          </div>
-        ) : (
-          filteredPages?.map(page => (
-            <button
-              key={page.id}
-              onClick={() => onPageSelect(page.id)}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-md 
-                       transition-colors duration-200 mb-1 group ${
-                currentPageId === page.id
-                  ? 'bg-[var(--color-list-active-bg)] text-[var(--color-list-active-text)]'
-                  : 'text-[var(--color-text-primary)] hover:bg-[var(--color-sidebar-hover)]'
-              }`}
-            >
-              {page.type === 'daily' ? (
-                <Calendar className="w-4 h-4 flex-shrink-0" />
-              ) : (
-                <FileText className="w-4 h-4 flex-shrink-0" />
-              )}
-              <span className="text-sm truncate flex-1">{page.title}</span>
-            </button>
-          ))
-        )}
-      </div>
+      <div className="flex-1" />
 
       {/* 底部信息 */}
       <div className="p-4 border-t border-[var(--color-border-strong)] space-y-3">
@@ -258,7 +212,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         <div className="text-xs text-[var(--color-text-muted)]">
-          <p>共 {filteredPages?.length || 0} 个页面</p>
+          <p>共 {pages?.length || 0} 个页面</p>
         </div>
       </div>
     </div>
