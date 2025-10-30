@@ -79,6 +79,12 @@ function App() {
     loadVault();
   }, []);
 
+  const recordVisit = useCallback((pageId: string) => {
+    recordPageVisit(pageId).catch(err => {
+      console.error('记录页面访问失败:', err);
+    });
+  }, []);
+
   // 初始化数据库和同步
   useEffect(() => {
     // 如果还在加载 vault，等待
@@ -112,34 +118,48 @@ function App() {
       // 加载第一个页面
       const pages = await db.pages.orderBy('updatedAt').reverse().limit(1).toArray();
       if (pages.length > 0) {
-        setCurrentPageId(pages[0].id);
+        const initialPageId = pages[0].id;
+        setCurrentPageId(initialPageId);
+        recordVisit(initialPageId);
       }
       
       setIsInitialized(true);
     };
     
     init();
-  }, [vaultHandle, isLoadingVault]);
+  }, [vaultHandle, isLoadingVault, recordVisit]);
 
   // 加载当前页面信息
   useEffect(() => {
-    if (currentPageId) {
-      db.pages.get(currentPageId).then(page => {
-        if (page) {
-          setCurrentPage(page);
-          // 记录页面访问历史
-          recordPageVisit(currentPageId).catch(err => {
-            console.error('记录页面访问失败:', err);
-          });
-        }
-      });
+    if (!currentPageId) {
+      setCurrentPage(null);
+      return;
     }
+
+    let isCancelled = false;
+
+    db.pages.get(currentPageId).then(page => {
+      if (isCancelled) {
+        return;
+      }
+
+      if (page) {
+        setCurrentPage(page);
+      } else {
+        setCurrentPage(null);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
   }, [currentPageId]);
 
   const handlePageSelect = useCallback((pageId: string) => {
     setCurrentPageId(pageId);
     setSelectedBlockContent(''); // 切换页面时清空选中内容
-  }, []);
+    recordVisit(pageId);
+  }, [recordVisit]);
 
   const handleBlockSelect = useCallback((_blockId: string | null, content: string) => {
     setSelectedBlockContent(content);
@@ -173,6 +193,7 @@ function App() {
 
       if (nextPage) {
         setCurrentPageId(nextPage.id);
+        recordVisit(nextPage.id);
       } else {
         setCurrentPageId(null);
         setCurrentPage(null);
@@ -181,7 +202,7 @@ function App() {
       console.error('删除页面失败:', error);
       alert('删除页面失败，请重试');
     }
-  }, [currentPageId, currentPage]);
+  }, [currentPageId, currentPage, recordVisit]);
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
