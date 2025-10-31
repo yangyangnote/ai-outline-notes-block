@@ -157,11 +157,13 @@ function App() {
     };
   }, [currentPageId]);
 
-  const handlePageSelect = useCallback((pageId: string) => {
+  const handlePageSelect = useCallback((pageId: string, shouldRecordVisit: boolean = true) => {
     setCurrentPageId(pageId);
     setSelectedBlockContent(''); // 切换页面时清空选中内容
     setViewMode('editor'); // 切换页面时返回编辑器视图
-    recordVisit(pageId);
+    if (shouldRecordVisit) {
+      recordVisit(pageId);
+    }
   }, [recordVisit]);
 
   const handleViewChange = useCallback((view: 'editor' | 'allPages') => {

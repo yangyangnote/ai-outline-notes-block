@@ -10,7 +10,7 @@ import type { SyncState } from '../../lib/syncEngine';
 
 interface SidebarProps {
   currentPageId: string | null;
-  onPageSelect: (pageId: string) => void;
+  onPageSelect: (pageId: string, shouldRecordVisit?: boolean) => void;
   onViewChange?: (view: 'editor' | 'allPages') => void;
   currentView?: 'editor' | 'allPages';
 }
@@ -148,7 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {recentPages.map(page => (
               <button
                 key={page.id}
-                onClick={() => onPageSelect(page.id)}
+                onClick={() => onPageSelect(page.id, false)}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-md
                          transition-colors duration-200 group ${
                   currentPageId === page.id

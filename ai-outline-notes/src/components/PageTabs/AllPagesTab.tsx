@@ -7,7 +7,7 @@ import { getBacklinksCount } from '../../utils/pageUtils';
 import type { Page } from '../../types';
 
 interface AllPagesTabProps {
-  onPageSelect: (pageId: string) => void;
+  onPageSelect: (pageId: string, shouldRecordVisit?: boolean) => void;
   currentPageId: string | null;
 }
 
