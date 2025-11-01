@@ -412,29 +412,6 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
         ))}
 
         <div className="mt-10 border-t border-[var(--color-border-subtle)] pt-6 space-y-8">
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-secondary)] mb-3">
-              页面链接
-            </h3>
-            {outgoingLinks.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {outgoingLinks.map(title => (
-                  <button
-                    key={title}
-                    type="button"
-                    onClick={() => void handleLinkClick(title)}
-                    className="inline-flex items-center rounded px-2 py-1 bg-[var(--color-link-bg)] text-[var(--color-link-text)] hover:bg-[var(--color-link-hover-bg)] transition-colors duration-200 border border-transparent text-sm"
-                    title={`跳转到页面：${title}`}
-                  >
-                    {`[[${title}]]`}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-[var(--color-text-muted)]">暂无页面链接</p>
-            )}
-          </section>
-
           <BidirectionalReferences
             pageId={pageId}
             pageTitle={pageTitle}

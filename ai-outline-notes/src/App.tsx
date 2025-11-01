@@ -157,14 +157,19 @@ function App() {
     };
   }, [currentPageId]);
 
-  const handlePageSelect = useCallback((pageId: string, shouldRecordVisit: boolean = true) => {
+  const handlePageSelect = useCallback(async (pageId: string, shouldRecordVisit: boolean = true) => {
+    // 先记录访问（如果需要），确保数据库更新后再切换页面
+    if (shouldRecordVisit) {
+      await recordPageVisit(pageId).catch(err => {
+        console.error('记录页面访问失败:', err);
+      });
+    }
+
+    // 然后再切换页面，此时数据库已更新，侧边栏会显示最新的访问记录
     setCurrentPageId(pageId);
     setSelectedBlockContent(''); // 切换页面时清空选中内容
     setViewMode('editor'); // 切换页面时返回编辑器视图
-    if (shouldRecordVisit) {
-      recordVisit(pageId);
-    }
-  }, [recordVisit]);
+  }, []);
 
   const handleViewChange = useCallback((view: 'editor' | 'allPages') => {
     setViewMode(view);
