@@ -179,6 +179,19 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
       return;
     }
 
+    // 检查 textarea 是否已经聚焦，如果是则不要重新设置焦点
+    // 这样可以避免在用户输入时干扰光标位置
+    const textarea = document.querySelector<HTMLTextAreaElement>(
+      `[data-block-textarea="${selectedBlockId}"]`
+    );
+    if (textarea && document.activeElement === textarea) {
+      // textarea 已经聚焦，不需要重新设置
+      if (pending && pending.blockId === selectedBlockId) {
+        pendingFocusRef.current = null;
+      }
+      return;
+    }
+
     focusBlockTextarea(selectedBlockId, targetCaret);
 
     if (pending && pending.blockId === selectedBlockId) {
