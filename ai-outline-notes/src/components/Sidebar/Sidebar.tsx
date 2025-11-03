@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { FileText, Plus, Calendar, Folder, RefreshCw, Settings, Clock, List } from 'lucide-react';
 import { db } from '../../db/database';
-import { createPage, getTodayDaily, getRecentPages } from '../../utils/pageUtils';
+import { createPage, getRecentPages } from '../../utils/pageUtils';
 import { getVaultHandle, getVaultName, clearVaultHandle, isFileSystemSupported } from '../../lib/fileSystem';
 import { getSyncEngine } from '../../lib/syncEngine';
 import type { SyncState } from '../../lib/syncEngine';
@@ -24,6 +24,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [vaultName, setVaultName] = useState<string>('');
   const [syncState, setSyncState] = useState<SyncState | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showNewPageDialog, setShowNewPageDialog] = useState(false);
+  const [newPageTitle, setNewPageTitle] = useState('');
 
   // 加载 vault 信息
   useEffect(() => {
@@ -68,16 +70,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
 
   const handleCreatePage = async () => {
-    const title = prompt('输入页面标题：');
+    setShowNewPageDialog(true);
+  };
+
+  const handleConfirmNewPage = async () => {
+    const title = newPageTitle.trim();
     if (title) {
-      const page = await createPage(title);
-      onPageSelect(page.id);
+      try {
+        const page = await createPage(title);
+        onPageSelect(page.id);
+        setShowNewPageDialog(false);
+        setNewPageTitle('');
+      } catch (error) {
+        console.error('创建页面失败:', error);
+        alert('创建页面失败：' + (error instanceof Error ? error.message : '未知错误'));
+      }
     }
   };
 
-  const handleOpenToday = async () => {
-    const todayPage = await getTodayDaily();
-    onPageSelect(todayPage.id);
+  const handleCancelNewPage = () => {
+    setShowNewPageDialog(false);
+    setNewPageTitle('');
   };
 
   const handleManualSync = async () => {
@@ -107,15 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* 快捷操作 */}
       <div className="p-2 border-b border-[var(--color-border-strong)] space-y-1">
         <button
-          onClick={handleOpenToday}
-          className="w-full flex items-center gap-2 px-3 py-2 text-left text-[var(--color-text-primary)]
-                   hover:bg-[var(--color-sidebar-hover)] rounded-md transition-colors duration-200"
-        >
-          <Calendar className="w-4 h-4" />
-          <span className="text-sm">今日日记</span>
-        </button>
-
-        <button
+          type="button"
           onClick={handleCreatePage}
           className="w-full flex items-center gap-2 px-3 py-2 text-left text-[var(--color-text-primary)]
                    hover:bg-[var(--color-sidebar-hover)] rounded-md transition-colors duration-200"
@@ -237,6 +242,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <p>共 {totalPagesCount || 0} 个页面</p>
         </div>
       </div>
+
+      {/* 新建页面对话框 */}
+      {showNewPageDialog && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
+            onClick={handleCancelNewPage}
+          >
+            <div
+              className="bg-[var(--color-popover-bg)] rounded-lg shadow-xl p-6 w-96 max-w-[90vw]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">新建页面</h2>
+              <input
+                type="text"
+                value={newPageTitle}
+                onChange={(e) => setNewPageTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleConfirmNewPage();
+                  } else if (e.key === 'Escape') {
+                    handleCancelNewPage();
+                  }
+                }}
+                placeholder="输入页面标题"
+                autoFocus
+                className="w-full px-3 py-2 border border-[var(--color-border-subtle)] rounded-md bg-[var(--color-editor-bg)] text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={handleCancelNewPage}
+                  className="px-4 py-2 text-sm rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-button-bg)] text-[var(--color-button-text)] hover:bg-[var(--color-button-hover)] transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleConfirmNewPage}
+                  disabled={!newPageTitle.trim()}
+                  className="px-4 py-2 text-sm rounded-md bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  创建
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
