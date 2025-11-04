@@ -2,8 +2,8 @@
 // 用于在 IndexedDB 和文件系统之间迁移数据
 
 import { db } from '../db/database';
-import type { Page, Block } from '../types';
-import { writePageFile, readAllPagesFromDirectory, ensureDirectory } from './fileOperations';
+import type { Page } from '../types';
+import { writePageFile, readAllPagesFromDirectory } from './fileOperations';
 import { initializeVaultStructure } from './fileOperations';
 
 // ==================== IndexedDB → 文件系统 ====================
@@ -215,4 +215,3 @@ export async function createBackup(
     throw new Error('无法创建备份');
   }
 }
-

@@ -115,6 +115,7 @@ export async function createPage(
     title,
     type,
     isReference: options?.isReference ?? false,
+    isFavorite: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -489,7 +490,6 @@ export async function getBacklinksCount(): Promise<Map<string, number>> {
     db.pages.toArray(),
   ]);
 
-  const pageMap = new Map(allPages.map(page => [page.id, page]));
   const backlinksCount = new Map<string, number>();
 
   // 初始化所有页面的计数为 0

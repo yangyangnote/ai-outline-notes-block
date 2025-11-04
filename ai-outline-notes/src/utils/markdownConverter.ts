@@ -50,8 +50,6 @@ function blocksToMarkdown(
   includeBlockIds: boolean,
   indentSize: number
 ): string {
-  // 构建块的层级树
-  const blockMap = new Map(blocks.map(b => [b.id, b]));
   const rootBlocks = blocks
     .filter(b => !b.parentId)
     .sort((a, b) => a.order - b.order);
@@ -278,4 +276,3 @@ export function estimateBlockDepth(line: string): number {
   if (!match) return 0;
   return Math.floor(match[1].length / 2);
 }
-

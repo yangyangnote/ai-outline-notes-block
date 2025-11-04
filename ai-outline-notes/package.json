@@ -20,6 +20,7 @@
     "electron:build:all": "npm run build && electron-builder -mwl"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
     "@lexical/list": "^0.22.0",
     "@lexical/markdown": "^0.22.0",
     "@lexical/react": "^0.22.0",

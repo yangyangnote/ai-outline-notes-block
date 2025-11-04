@@ -1,6 +1,6 @@
 // 主应用组件
 import { useEffect, useState, useCallback } from 'react';
-import { MessageSquare, Sun, Moon, MoreHorizontal, Trash2 } from 'lucide-react';
+import { MessageSquare, Sun, Moon, MoreHorizontal, Trash2, Star } from 'lucide-react';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { OutlineEditor } from './components/Editor/OutlineEditor';
 import { AllPagesTab } from './components/PageTabs/AllPagesTab';
@@ -185,6 +185,29 @@ function App() {
     setIsInitialized(false);
   }, []);
 
+  const handleToggleFavorite = useCallback(async () => {
+    if (!currentPageId || !currentPage) {
+      return;
+    }
+
+    try {
+      const newFavoriteStatus = !currentPage.isFavorite;
+      await db.pages.update(currentPageId, {
+        isFavorite: newFavoriteStatus,
+        updatedAt: Date.now()
+      });
+      setCurrentPage(prev =>
+        prev && prev.id === currentPageId
+          ? { ...prev, isFavorite: newFavoriteStatus }
+          : prev
+      );
+      setIsPageMenuOpen(false);
+    } catch (error) {
+      console.error('更新收藏状态失败:', error);
+      alert('操作失败，请重试');
+    }
+  }, [currentPageId, currentPage]);
+
   const handleDeleteCurrentPage = useCallback(async () => {
     if (!currentPageId || !currentPage) {
       return;
@@ -289,6 +312,13 @@ function App() {
                     onClick={() => setIsPageMenuOpen(false)}
                   />
                   <div className="absolute right-0 top-10 z-50 w-48 rounded-md border border-[var(--color-popover-border)] bg-[var(--color-popover-bg)] py-2 shadow-lg transition-colors duration-200">
+                    <button
+                      onClick={handleToggleFavorite}
+                      className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-sidebar-hover)] transition-colors duration-200"
+                    >
+                      <Star className={`w-4 h-4 ${currentPage.isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                      <span>{currentPage.isFavorite ? '取消收藏' : '添加收藏'}</span>
+                    </button>
                     <button
                       onClick={handleDeleteCurrentPage}
                       className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] transition-colors duration-200"

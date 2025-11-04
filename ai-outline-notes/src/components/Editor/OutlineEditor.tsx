@@ -1,5 +1,5 @@
 // 大纲编辑器主组件
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/database';
 import { BlockEditor } from './BlockEditor';
@@ -13,7 +13,7 @@ import {
   toggleBlockCollapse,
   updateBlock
 } from '../../utils/blockUtils';
-import { ensurePageByTitle, extractPageLinks } from '../../utils/pageUtils';
+import { ensurePageByTitle } from '../../utils/pageUtils';
 import { BidirectionalReferences } from './BidirectionalReferences';
 import type { Block } from '../../types';
 
@@ -140,7 +140,7 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
     return () => {
       isActive = false;
     };
-  }, [liveBlocks, pageId, onBlockSelect, focusBlockTextarea]);
+  }, [liveBlocks, pageId, onBlockSelect, focusBlockTextarea, isCreatingFirstBlock]);
 
   // 注释掉自动选中第一个块的逻辑，避免第一个块自动进入编辑模式
   // useEffect(() => {
@@ -198,21 +198,6 @@ export const OutlineEditor: React.FC<OutlineEditorProps> = ({
       pendingFocusRef.current = null;
     }
   }, [selectedBlockId, blocks, focusBlockTextarea]);
-
-  const outgoingLinks = useMemo(() => {
-    const links = new Set<string>();
-
-    for (const block of blocks) {
-      const linkTitles = extractPageLinks(block.content);
-      for (const title of linkTitles) {
-        const normalized = title.trim();
-        if (!normalized) continue;
-        links.add(normalized);
-      }
-    }
-
-    return Array.from(links).sort((a, b) => a.localeCompare(b, 'zh-CN'));
-  }, [blocks]);
 
   // 计算块的层级（通过递归查找父块）
   const getBlockLevel = (block: Block): number => {

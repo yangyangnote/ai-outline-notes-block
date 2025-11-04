@@ -3,6 +3,8 @@ import { after, beforeEach, describe, it } from 'node:test';
 
 import type { Page, PageVisit } from '../src/types';
 
+type NotesDb = typeof import('../src/db/database').db;
+
 const pageVisits: PageVisit[] = [];
 const pages = new Map<string, Page>();
 
@@ -91,12 +93,12 @@ async function addPage(page: Page) {
 }
 
 resetMockDb();
-__setPageUtilsDb(mockDb as any);
+__setPageUtilsDb(mockDb as unknown as NotesDb);
 
 describe('page visit utilities', () => {
   beforeEach(() => {
     resetMockDb();
-    __setPageUtilsDb(mockDb as any);
+    __setPageUtilsDb(mockDb as unknown as NotesDb);
   });
 
   after(() => {

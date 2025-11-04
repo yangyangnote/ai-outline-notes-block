@@ -1,7 +1,7 @@
 // 侧边栏 - 页面列表
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FileText, Plus, Calendar, Folder, RefreshCw, Settings, Clock, List } from 'lucide-react';
+import { FileText, Plus, Calendar, Folder, RefreshCw, Settings, Clock, List, Star } from 'lucide-react';
 import { db } from '../../db/database';
 import { createPage, getRecentPages } from '../../utils/pageUtils';
 import { getVaultHandle, getVaultName, clearVaultHandle, isFileSystemSupported } from '../../lib/fileSystem';
@@ -49,6 +49,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       unsubscribe?.then(fn => fn?.());
     };
   }, []);
+
+  // 实时查询收藏的页面
+  const favoritePages = useLiveQuery(
+    async () => {
+      const allPages = await db.pages.toArray();
+      const favorites = allPages
+        .filter(page => (page.isFavorite ?? false) && !page.isReference)
+        .sort((a, b) => a.title.localeCompare(b.title));
+      return favorites;
+    },
+    [currentPageId]
+  );
 
   // 实时查询最近访问的页面（添加 currentPageId 作为依赖，确保切换页面时更新）
   const recentPages = useLiveQuery(
@@ -142,6 +154,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
+      {/* 收藏页面 */}
+      {favoritePages && favoritePages.length > 0 && (
+        <div className="p-2 border-b border-[var(--color-border-strong)]">
+          <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide">
+            <Star className="w-3 h-3" />
+            <span>收藏页面</span>
+          </div>
+          <div className="space-y-1">
+            {favoritePages.map(page => (
+              <button
+                key={page.id}
+                onClick={() => onPageSelect(page.id, false)}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-md
+                         transition-colors duration-200 group ${
+                  currentPageId === page.id
+                    ? 'bg-[var(--color-list-active-bg)] text-[var(--color-list-active-text)]'
+                    : 'text-[var(--color-text-primary)] hover:bg-[var(--color-sidebar-hover)]'
+                }`}
+              >
+                {page.type === 'daily' ? (
+                  <Calendar className="w-4 h-4 flex-shrink-0" />
+                ) : (
+                  <FileText className="w-4 h-4 flex-shrink-0" />
+                )}
+                <span className="text-sm truncate flex-1">{page.title}</span>
+                {page.isFavorite ? (
+                  <Star className="w-3 h-3 text-yellow-400 flex-shrink-0 fill-yellow-400" />
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 最近使用 */}
       {recentPages && recentPages.length > 0 && (
         <div className="p-2 border-b border-[var(--color-border-strong)]">
@@ -167,6 +213,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <FileText className="w-4 h-4 flex-shrink-0" />
                 )}
                 <span className="text-sm truncate flex-1">{page.title}</span>
+                {page.isFavorite ? (
+                  <Star className="w-3 h-3 text-yellow-400 flex-shrink-0 fill-yellow-400" />
+                ) : null}
               </button>
             ))}
           </div>

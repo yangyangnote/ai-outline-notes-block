@@ -61,6 +61,23 @@ class NotesDatabase extends Dexie {
       conversations: 'id, pageId, createdAt, updatedAt',
       pageVisits: 'id, pageId, visitedAt, [pageId+visitedAt]'
     });
+
+    // 版本 5：添加页面收藏功能
+    this.version(5).stores({
+      blocks: 'id, pageId, parentId, order, collapsed, createdAt, updatedAt',
+      pages: 'id, title, type, isReference, isFavorite, createdAt, updatedAt',
+      chatMessages: 'id, pageId, createdAt',
+      conversations: 'id, pageId, createdAt, updatedAt',
+      pageVisits: 'id, pageId, visitedAt, [pageId+visitedAt]'
+    }).upgrade(async tx => {
+      const pages = await tx.table('pages').toArray();
+      for (const page of pages) {
+        if (page.isFavorite === undefined) {
+          await tx.table('pages').update(page.id, { isFavorite: false });
+        }
+      }
+      console.log('数据库升级到版本 5：已为页面添加 isFavorite 标记');
+    });
   }
 }
 
@@ -92,6 +109,7 @@ export async function initializeDatabase() {
       title: '欢迎使用 AI 大纲笔记',
       type: 'note',
       isReference: false,
+      isFavorite: false,
       createdAt: now,
       updatedAt: now,
     });

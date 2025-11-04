@@ -16,6 +16,7 @@ export interface Page {
   title: string;
   type: 'note' | 'daily';
   isReference?: boolean;
+  isFavorite?: boolean;
   createdAt: number;
   updatedAt: number;
 }

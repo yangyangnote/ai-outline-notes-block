@@ -292,7 +292,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
   const setMarkdownImage = (file: File, dataUrl: string) => {
     const baseName = file.name.replace(/\.[^/.]+$/, '').trim();
-    const safeAlt = (baseName || 'image').replace(/([\[\]\\])/g, '\\$1');
+    const safeAlt = (baseName || 'image').replace(/[[\]\\]/g, '\\$&');
     const markdown = `![${safeAlt}](${dataUrl})`;
     setContent(markdown);
     onUpdate(block.id, markdown);

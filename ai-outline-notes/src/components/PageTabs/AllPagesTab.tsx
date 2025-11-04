@@ -4,7 +4,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { db } from '../../db/database';
 import { getBacklinksCount } from '../../utils/pageUtils';
-import type { Page } from '../../types';
 
 interface AllPagesTabProps {
   onPageSelect: (pageId: string, shouldRecordVisit?: boolean) => void;

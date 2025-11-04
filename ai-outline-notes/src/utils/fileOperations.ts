@@ -205,7 +205,7 @@ export function generateFilename(page: Page): string {
   } else {
     // 普通页面：清理标题，移除特殊字符
     const safeName = page.title
-      .replace(/[\/\\:*?"<>|]/g, '') // 移除文件系统不允许的字符
+      .replace(/[\\/:*?"<>|]/g, '') // 移除文件系统不允许的字符
       .replace(/\s+/g, '-')           // 空格转为连字符
       .trim();
     return `${safeName}.md`;
@@ -305,4 +305,3 @@ export async function getVaultStats(
     };
   }
 }
-

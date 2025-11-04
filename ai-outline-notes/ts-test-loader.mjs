@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import ts from 'typescript';
+import { readFile } from "node:fs/promises";
+import ts from "typescript";
 
 const compilerOptions = {
   module: ts.ModuleKind.ESNext,
@@ -11,35 +11,50 @@ const compilerOptions = {
 };
 
 export async function load(url, context, defaultLoad) {
-  if (!url.startsWith('file:') || !url.endsWith('.ts')) {
+  if (!url.startsWith("file:") || !url.endsWith(".ts")) {
     return defaultLoad(url, context, defaultLoad);
   }
 
   const fileUrl = new URL(url);
-  const source = await readFile(fileUrl, 'utf8');
-  const transpiled = ts.transpileModule(source, { compilerOptions, fileName: fileUrl.pathname });
+  const source = await readFile(fileUrl, "utf8");
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions,
+    fileName: fileUrl.pathname,
+  });
 
   return {
-    format: 'module',
+    format: "module",
     source: transpiled.outputText,
     shortCircuit: true,
   };
 }
 
 export async function resolve(specifier, context, defaultResolve) {
-  if (specifier.startsWith('node:') || specifier.startsWith('data:') || specifier.startsWith('file:')) {
+  if (
+    specifier.startsWith("node:") ||
+    specifier.startsWith("data:") ||
+    specifier.startsWith("file:")
+  ) {
     return defaultResolve(specifier, context, defaultResolve);
   }
 
-  if (specifier.endsWith('.ts')) {
+  if (specifier.endsWith(".ts")) {
     const resolved = await defaultResolve(specifier, context, defaultResolve);
     return { ...resolved, url: resolved.url }; // ensure URL returned
   }
 
-  if ((specifier.startsWith('.') || specifier.startsWith('/')) && !specifier.endsWith('.js') && !specifier.endsWith('.json')) {
+  if (
+    (specifier.startsWith(".") || specifier.startsWith("/")) &&
+    !specifier.endsWith(".js") &&
+    !specifier.endsWith(".json")
+  ) {
     try {
       const tsSpecifier = `${specifier}.ts`;
-      const resolved = await defaultResolve(tsSpecifier, context, defaultResolve);
+      const resolved = await defaultResolve(
+        tsSpecifier,
+        context,
+        defaultResolve,
+      );
       return resolved;
     } catch {
       // fallback to default resolution
