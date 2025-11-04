@@ -1,7 +1,7 @@
 // 侧边栏 - 页面列表
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FileText, Plus, Calendar, Folder, RefreshCw, Settings, Clock, List, Star } from 'lucide-react';
+import { FileText, Plus, Calendar, Folder, RefreshCw, Settings, Clock, List, Star, ChevronDown, ChevronRight } from 'lucide-react';
 import { db } from '../../db/database';
 import { createPage, getRecentPages } from '../../utils/pageUtils';
 import { getVaultHandle, getVaultName, clearVaultHandle, isFileSystemSupported } from '../../lib/fileSystem';
@@ -26,6 +26,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showSettings, setShowSettings] = useState(false);
   const [showNewPageDialog, setShowNewPageDialog] = useState(false);
   const [newPageTitle, setNewPageTitle] = useState('');
+  const [isFavoritesCollapsed, setIsFavoritesCollapsed] = useState(false);
+  const [isRecentCollapsed, setIsRecentCollapsed] = useState(false);
 
   // 加载 vault 信息
   useEffect(() => {
@@ -157,68 +159,84 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* 收藏页面 */}
       {favoritePages && favoritePages.length > 0 && (
         <div className="p-2 border-b border-[var(--color-border-strong)]">
-          <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide">
+          <button
+            type="button"
+            onClick={() => setIsFavoritesCollapsed(prev => !prev)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide rounded-md hover:bg-[var(--color-sidebar-hover)] transition-colors"
+          >
             <Star className="w-3 h-3" />
-            <span>收藏页面</span>
-          </div>
-          <div className="space-y-1">
-            {favoritePages.map(page => (
-              <button
-                key={page.id}
-                onClick={() => onPageSelect(page.id, false)}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-md
-                         transition-colors duration-200 group ${
-                  currentPageId === page.id
-                    ? 'bg-[var(--color-list-active-bg)] text-[var(--color-list-active-text)]'
-                    : 'text-[var(--color-text-primary)] hover:bg-[var(--color-sidebar-hover)]'
-                }`}
-              >
-                {page.type === 'daily' ? (
-                  <Calendar className="w-4 h-4 flex-shrink-0" />
-                ) : (
-                  <FileText className="w-4 h-4 flex-shrink-0" />
-                )}
-                <span className="text-sm truncate flex-1">{page.title}</span>
-                {page.isFavorite ? (
-                  <Star className="w-3 h-3 text-yellow-400 flex-shrink-0 fill-yellow-400" />
-                ) : null}
-              </button>
-            ))}
-          </div>
+            <span className="flex-1 text-left">收藏页面</span>
+            {isFavoritesCollapsed ? (
+              <ChevronRight className="w-3 h-3" />
+            ) : (
+              <ChevronDown className="w-3 h-3" />
+            )}
+          </button>
+          {!isFavoritesCollapsed && (
+            <div className="mt-1 space-y-1">
+              {favoritePages.map(page => (
+                <button
+                  key={page.id}
+                  onClick={() => onPageSelect(page.id, false)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-md
+                           transition-colors duration-200 group ${
+                    currentPageId === page.id
+                      ? 'bg-[var(--color-list-active-bg)] text-[var(--color-list-active-text)]'
+                      : 'text-[var(--color-text-primary)] hover:bg-[var(--color-sidebar-hover)]'
+                  }`}
+                >
+                  {page.type === 'daily' ? (
+                    <Calendar className="w-4 h-4 flex-shrink-0" />
+                  ) : (
+                    <FileText className="w-4 h-4 flex-shrink-0" />
+                  )}
+                  <span className="text-sm truncate flex-1">{page.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* 最近使用 */}
       {recentPages && recentPages.length > 0 && (
         <div className="p-2 border-b border-[var(--color-border-strong)]">
-          <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide">
+          <button
+            type="button"
+            onClick={() => setIsRecentCollapsed(prev => !prev)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide rounded-md hover:bg-[var(--color-sidebar-hover)] transition-colors"
+          >
             <Clock className="w-3 h-3" />
-            <span>最近使用</span>
-          </div>
-          <div className="space-y-1">
-            {recentPages.map(page => (
-              <button
-                key={page.id}
-                onClick={() => onPageSelect(page.id, false)}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-md
-                         transition-colors duration-200 group ${
-                  currentPageId === page.id
-                    ? 'bg-[var(--color-list-active-bg)] text-[var(--color-list-active-text)]'
-                    : 'text-[var(--color-text-primary)] hover:bg-[var(--color-sidebar-hover)]'
-                }`}
-              >
-                {page.type === 'daily' ? (
-                  <Calendar className="w-4 h-4 flex-shrink-0" />
-                ) : (
-                  <FileText className="w-4 h-4 flex-shrink-0" />
-                )}
-                <span className="text-sm truncate flex-1">{page.title}</span>
-                {page.isFavorite ? (
-                  <Star className="w-3 h-3 text-yellow-400 flex-shrink-0 fill-yellow-400" />
-                ) : null}
-              </button>
-            ))}
-          </div>
+            <span className="flex-1 text-left">最近使用</span>
+            {isRecentCollapsed ? (
+              <ChevronRight className="w-3 h-3" />
+            ) : (
+              <ChevronDown className="w-3 h-3" />
+            )}
+          </button>
+          {!isRecentCollapsed && (
+            <div className="mt-1 space-y-1">
+              {recentPages.map(page => (
+                <button
+                  key={page.id}
+                  onClick={() => onPageSelect(page.id, false)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left rounded-md
+                           transition-colors duration-200 group ${
+                    currentPageId === page.id
+                      ? 'bg-[var(--color-list-active-bg)] text-[var(--color-list-active-text)]'
+                      : 'text-[var(--color-text-primary)] hover:bg-[var(--color-sidebar-hover)]'
+                  }`}
+                >
+                  {page.type === 'daily' ? (
+                    <Calendar className="w-4 h-4 flex-shrink-0" />
+                  ) : (
+                    <FileText className="w-4 h-4 flex-shrink-0" />
+                  )}
+                  <span className="text-sm truncate flex-1">{page.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
