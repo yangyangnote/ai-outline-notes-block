@@ -1,14 +1,33 @@
-// OpenAI API 集成
+// OpenAI/DeepSeek API 集成（使用 OpenAI SDK 兼容层）
 import OpenAI from 'openai';
+import type { ClientOptions as OpenAIClientOptions } from 'openai';
 
 // 注意：在生产环境中，API Key 应该通过后端代理，而不是直接在前端使用
 let openaiClient: OpenAI | null = null;
+let defaultModel = 'gpt-3.5-turbo';
 
-export function initializeOpenAI(apiKey: string) {
-  openaiClient = new OpenAI({
+type InitializeOptions = {
+  baseURL?: string;
+  defaultModel?: string;
+  headers?: OpenAIClientOptions['defaultHeaders'];
+};
+
+export function initializeOpenAI(apiKey: string, options: InitializeOptions = {}) {
+  defaultModel = options.defaultModel ?? 'gpt-3.5-turbo';
+
+  const clientConfig: OpenAIClientOptions = {
     apiKey,
+    baseURL: options.baseURL || undefined,
+    defaultHeaders: options.headers,
     dangerouslyAllowBrowser: true, // 仅用于开发/演示
-  });
+  };
+
+  openaiClient = new OpenAI(clientConfig);
+}
+
+export function resetOpenAIClient() {
+  openaiClient = null;
+  defaultModel = 'gpt-3.5-turbo';
 }
 
 export function isOpenAIInitialized(): boolean {
@@ -23,11 +42,11 @@ export async function* streamChatCompletion(
   }
 ): AsyncGenerator<string, void, unknown> {
   if (!openaiClient) {
-    throw new Error('OpenAI 未初始化。请先设置 API Key。');
+    throw new Error('AI 客户端未初始化。请先设置 API Key。');
   }
 
   const stream = await openaiClient.chat.completions.create({
-    model: options?.model || 'gpt-3.5-turbo',
+    model: options?.model || defaultModel,
     messages,
     temperature: options?.temperature || 0.7,
     stream: true,
@@ -49,11 +68,11 @@ export async function getChatCompletion(
   }
 ): Promise<string> {
   if (!openaiClient) {
-    throw new Error('OpenAI 未初始化。请先设置 API Key。');
+    throw new Error('AI 客户端未初始化。请先设置 API Key。');
   }
 
   const response = await openaiClient.chat.completions.create({
-    model: options?.model || 'gpt-3.5-turbo',
+    model: options?.model || defaultModel,
     messages,
     temperature: options?.temperature || 0.7,
   });
@@ -65,4 +84,3 @@ export async function getChatCompletion(
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
-

@@ -162,14 +162,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }, [isSelected]); // 只依赖 isSelected
 
-  // 自动调整 textarea 高度
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
-    }
-  }, [content]);
-
   useEffect(() => {
     if (!isMenuOpen) return;
 
@@ -479,8 +471,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     updatePendingCursorFromPoint(touch.clientX, touch.clientY);
   };
 
-  const renderDisplayContent = (): React.ReactNode => {
-    const trimmed = block.content.trim();
+  const renderDisplayContent = (source: string): React.ReactNode => {
+    const trimmed = source.trim();
     if (trimmed.length === 0) {
       // 返回一个零宽字符以保持布局，但不显示任何文字
       return <span className="opacity-0">&nbsp;</span>;
@@ -491,9 +483,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
-    while ((match = regex.exec(block.content)) !== null) {
+    while ((match = regex.exec(source)) !== null) {
       const matchIndex = match.index;
-      const before = block.content.slice(lastIndex, matchIndex);
+      const before = source.slice(lastIndex, matchIndex);
       if (before.length > 0) {
         elements.push(
           <span key={`text-${block.id}-${lastIndex}`} className="whitespace-pre-wrap break-words">
@@ -527,7 +519,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       lastIndex = regex.lastIndex;
     }
 
-    const after = block.content.slice(lastIndex);
+    const after = source.slice(lastIndex);
     if (after.length > 0) {
       elements.push(
         <span key={`text-${block.id}-${lastIndex}-end`} className="whitespace-pre-wrap break-words">
@@ -542,7 +534,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   return (
     <div
       ref={containerRef}
-      className="block-item flex items-start group min-h-[24px]"
+      className="block-item flex items-start group min-h-[24px] w-full"
       style={{
         paddingLeft: `${level * 24}px`,
         paddingTop: '2px',
@@ -624,7 +616,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       </div>
 
       {/* 块内容编辑器 */}
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         {showImagePreview ? (
           <button
             type="button"
@@ -644,55 +636,70 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               className="max-h-80 max-w-full rounded border border-[var(--color-border-subtle)] object-contain"
             />
           </button>
-        ) : isSelected ? (
-          <textarea
-            ref={textareaRef}
-            data-block-textarea={block.id}
-            value={content}
-            onChange={handleChange}
-            onCompositionStart={handleCompositionStart}
-            onCompositionEnd={handleCompositionEnd}
-            onKeyDown={handleKeyDown}
-            onMouseUp={handleTextareaMouseUp}
-            onTouchEnd={handleTextareaTouchEnd}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            onDragEnter={handleDragEnter}
-            onDragOver={handleDragOver}
-            onDragEnterCapture={handleDragEnter}
-            onDragOverCapture={handleDragOver}
-            onDrop={handleDrop}
-            onDropCapture={handleDrop}
-            autoFocus={isSelected}
-            className="w-full resize-none border-none outline-none bg-transparent py-0.5 px-1 rounded-sm
-                       focus:ring-0 focus:outline-none
-                       text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] selection:bg-blue-200/50"
-            rows={1}
-            style={{ lineHeight: '1.5' }}
-          />
         ) : (
-          <div
-            ref={displayContentRef}
-            tabIndex={0}
-            role="button"
-            onClick={() => onSelect(block.id)}
-            onFocus={(event) => {
-              if (event.target === event.currentTarget) {
-                onSelect(block.id);
-              }
-            }}
-            onMouseDown={handleDisplayMouseDown}
-            onTouchStart={handleDisplayTouchStart}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                onSelect(block.id);
-              }
-            }}
-            className="w-full cursor-text py-0.5 px-1 rounded-sm outline-none focus:ring-0 text-[var(--color-text-primary)] whitespace-pre-wrap break-words"
-            style={{ lineHeight: '1.5' }}
-          >
-            {renderDisplayContent()}
+          <div className="relative">
+            <div
+              ref={displayContentRef}
+              tabIndex={isSelected ? -1 : 0}
+              role="button"
+              onClick={() => onSelect(block.id)}
+              onFocus={(event) => {
+                if (event.target === event.currentTarget) {
+                  onSelect(block.id);
+                }
+              }}
+              onMouseDown={handleDisplayMouseDown}
+              onTouchStart={handleDisplayTouchStart}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  onSelect(block.id);
+                }
+              }}
+              className={`w-full cursor-text py-0.5 px-1 rounded-sm outline-none focus:ring-0 text-[var(--color-text-primary)] whitespace-pre-wrap break-words ${
+                isSelected ? 'pointer-events-none select-none' : ''
+              }`}
+              style={{
+                lineHeight: '1.5',
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
+                visibility: isSelected ? 'hidden' : 'visible'
+              }}
+              aria-hidden={isSelected}
+            >
+              {renderDisplayContent(isSelected ? content : block.content)}
+            </div>
+            {isSelected && (
+              <textarea
+                ref={textareaRef}
+                data-block-textarea={block.id}
+                value={content}
+                onChange={handleChange}
+                onCompositionStart={handleCompositionStart}
+                onCompositionEnd={handleCompositionEnd}
+                onKeyDown={handleKeyDown}
+                onMouseUp={handleTextareaMouseUp}
+                onTouchEnd={handleTextareaTouchEnd}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                onDragEnter={handleDragEnter}
+                onDragOver={handleDragOver}
+                onDragEnterCapture={handleDragEnter}
+                onDragOverCapture={handleDragOver}
+                onDrop={handleDrop}
+                onDropCapture={handleDrop}
+                autoFocus={isSelected}
+                className="absolute inset-0 w-full h-full resize-none border-none outline-none bg-transparent py-0.5 px-1 rounded-sm
+                           focus:ring-0 focus:outline-none
+                           text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] selection:bg-blue-200/50"
+                style={{
+                  lineHeight: '1.5',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'anywhere'
+                }}
+              />
+            )}
           </div>
         )}
       </div>

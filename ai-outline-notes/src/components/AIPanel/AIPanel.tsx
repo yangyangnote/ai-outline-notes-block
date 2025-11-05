@@ -2,8 +2,25 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, X, Settings } from 'lucide-react';
 import { ChatMessage } from './ChatMessage';
-import { streamChatCompletion, isOpenAIInitialized, initializeOpenAI } from '../../lib/openai';
+import { streamChatCompletion, isOpenAIInitialized, initializeOpenAI, resetOpenAIClient } from '../../lib/openai';
 import { createBlock } from '../../utils/blockUtils';
+
+const AI_PROVIDERS = {
+  deepseek: {
+    label: 'DeepSeek',
+    storageKey: 'deepseek_api_key',
+    model: 'deepseek-chat',
+    baseURL: 'https://api.deepseek.com/v1',
+  },
+  openai: {
+    label: 'OpenAI',
+    storageKey: 'openai_api_key',
+    model: 'gpt-3.5-turbo',
+    baseURL: undefined,
+  },
+} as const;
+
+type ProviderKey = keyof typeof AI_PROVIDERS;
 
 interface Message {
   id: string;
@@ -31,6 +48,13 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   const [isStreaming, setIsStreaming] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [provider, setProvider] = useState<ProviderKey>(() => {
+    if (typeof window === 'undefined') {
+      return 'deepseek';
+    }
+    const stored = localStorage.getItem('ai_provider');
+    return stored === 'openai' ? 'openai' : 'deepseek';
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 自动滚动到底部
@@ -42,21 +66,34 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     scrollToBottom();
   }, [messages]);
 
-  // 检查是否已设置 API Key
   useEffect(() => {
-    const saved = localStorage.getItem('openai_api_key');
-    if (saved) {
-      setApiKey(saved);
-      if (!isOpenAIInitialized()) {
-        initializeOpenAI(saved);
-      }
+    if (typeof window === 'undefined') {
+      return;
     }
-  }, []);
+
+    const providerConfig = AI_PROVIDERS[provider];
+    const storedKey = localStorage.getItem(providerConfig.storageKey) ?? '';
+    setApiKey(storedKey);
+    setMessages([]);
+    setInput('');
+    setIsStreaming(false);
+
+    if (storedKey) {
+      initializeOpenAI(storedKey, {
+        baseURL: providerConfig.baseURL,
+        defaultModel: providerConfig.model,
+      });
+    } else {
+      resetOpenAIClient();
+    }
+  }, [provider]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
+    const providerConfig = AI_PROVIDERS[provider];
+
     if (!isOpenAIInitialized()) {
-      alert('请先设置 OpenAI API Key');
+      alert(`请先配置 ${providerConfig.label} API Key`);
       setShowSettings(true);
       return;
     }
@@ -102,7 +139,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
     try {
       // 流式接收响应
       let fullContent = '';
-      for await (const chunk of streamChatCompletion(contextMessages)) {
+      for await (const chunk of streamChatCompletion(contextMessages, { model: providerConfig.model })) {
         fullContent += chunk;
         setMessages(prev =>
           prev.map(m =>
@@ -112,10 +149,16 @@ export const AIPanel: React.FC<AIPanelProps> = ({
       }
     } catch (error) {
       console.error('AI 响应错误:', error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : '请检查 API Key 或网络连接。';
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantMessageId
-            ? { ...m, content: '抱歉，发生了错误。请检查 API Key 或网络连接。' }
+            ? { ...m, content: `抱歉，发生了错误：${errorMessage}` }
             : m
         )
       );
@@ -133,12 +176,22 @@ export const AIPanel: React.FC<AIPanelProps> = ({
   };
 
   const handleSaveApiKey = () => {
-    if (apiKey.trim()) {
-      localStorage.setItem('openai_api_key', apiKey);
-      initializeOpenAI(apiKey);
-      setShowSettings(false);
-      alert('API Key 已保存');
+    const trimmed = apiKey.trim();
+    if (!trimmed) {
+      return;
     }
+
+    const providerConfig = AI_PROVIDERS[provider];
+    localStorage.setItem(providerConfig.storageKey, trimmed);
+    localStorage.setItem('ai_provider', provider);
+
+    initializeOpenAI(trimmed, {
+      baseURL: providerConfig.baseURL,
+      defaultModel: providerConfig.model,
+    });
+    setApiKey(trimmed);
+    setShowSettings(false);
+    alert(`${providerConfig.label} API Key 已保存`);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -177,13 +230,28 @@ export const AIPanel: React.FC<AIPanelProps> = ({
       {showSettings && (
         <div className="p-4 bg-[var(--color-callout-bg)] border-b border-[var(--color-border-strong)] rounded-none">
           <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-            OpenAI API Key
+            AI 提供商
+          </label>
+          <select
+            value={provider}
+            onChange={(e) => setProvider(e.target.value as ProviderKey)}
+            className="w-full px-3 py-2 border border-[var(--color-input-border)] rounded-md bg-[var(--color-input-bg)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-soft)] transition-colors duration-200 mb-3"
+          >
+            {Object.entries(AI_PROVIDERS).map(([key, config]) => (
+              <option key={key} value={key}>
+                {config.label}
+              </option>
+            ))}
+          </select>
+
+          <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+            {AI_PROVIDERS[provider].label} API Key
           </label>
           <input
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="sk-..."
+            placeholder="输入 API Key"
             className="w-full px-3 py-2 border border-[var(--color-input-border)] rounded-md mb-2 bg-[var(--color-input-bg)] text-[var(--color-text-primary)] placeholder:text-[var(--color-input-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-soft)] transition-colors duration-200"
           />
           <button
@@ -193,7 +261,7 @@ export const AIPanel: React.FC<AIPanelProps> = ({
             保存
           </button>
           <p className="text-xs text-[var(--color-text-secondary)] mt-2">
-            注意：API Key 存储在本地，仅用于开发演示。
+            注意：API Key 仅存储在本地浏览器中，当前默认提供商为 {AI_PROVIDERS[provider].label}。
           </p>
         </div>
       )}
