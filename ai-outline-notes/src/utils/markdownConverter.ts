@@ -107,18 +107,31 @@ export function markdownToPage(
   // 分离 frontmatter 和内容
   const { frontmatter, bodyContent } = parseFrontmatter(content);
 
+  // 从文件名生成稳定的标题（用于查找已存在的页面）
+  const titleFromFilename = filenameToTitle(filename);
+
+  // 使用 frontmatter 中的 ID（如果有），否则使用 null
+  // 不在这里生成新 ID，而是让调用方根据标题查找已存在的页面
+  const pageId = frontmatter.id || null;
+
+  // 解析块内容（先解析，用于判断是否是引用页面）
+  const tempPageId = pageId || 'temp-' + crypto.randomUUID();
+  const blocks = parseBlocks(bodyContent, tempPageId);
+
+  // 判断是否是引用页面：
+  // 1. 如果页面没有任何内容块，则视为引用页面
+  // 2. 如果页面只有空白内容，也视为引用页面
+  const hasContent = blocks.length > 0 && blocks.some(block => block.content.trim().length > 0);
+
   // 解析页面元数据
   const page: Partial<Page> = {
-    id: frontmatter.id || crypto.randomUUID(),
-    title: frontmatter.title || filenameToTitle(filename),
+    id: pageId ?? undefined,  // 可能是 null，由调用方处理
+    title: frontmatter.title || titleFromFilename,
     type: (frontmatter.type as 'note' | 'daily') || 'note',
     createdAt: frontmatter.created ? new Date(frontmatter.created).getTime() : Date.now(),
     updatedAt: frontmatter.updated ? new Date(frontmatter.updated).getTime() : Date.now(),
-    isReference: false,
+    isReference: !hasContent, // 没有内容的页面标记为引用页面
   };
-
-  // 解析块内容
-  const blocks = parseBlocks(bodyContent, page.id!);
 
   return { page, blocks };
 }

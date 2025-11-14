@@ -1,14 +1,26 @@
 // 单个块编辑器组件
-import React, { useRef, useEffect, useState, useLayoutEffect } from 'react';
+import React, { useRef, useEffect, useState, useLayoutEffect, useMemo } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import type { Components, ExtraProps } from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { Block } from '../../types';
+import { useResolvedImageUrl } from '../../hooks/useResolvedImageUrl';
 
 interface ParsedMarkdownImage {
   alt: string;
   url: string;
 }
 
+type MarkdownCodeProps = React.ComponentPropsWithoutRef<'code'> &
+  ExtraProps & {
+    inline?: boolean;
+    children?: React.ReactNode;
+  };
+
 const LIST_PREFIX_PATTERN = /^(?:[-*+]\s+|\d+\.\s+)/;
+const TEXTAREA_DRAG_THRESHOLD_PX = 6;
 
 const parseMarkdownImage = (value: string): ParsedMarkdownImage | null => {
   const trimmed = value.trim();
@@ -84,29 +96,42 @@ const findWikiLinkAtPosition = (text: string, position: number) => {
 
 interface BlockEditorProps {
   block: Block;
+  pageDirectory: 'pages' | 'journals';
   level: number; // 缩进层级
   isSelected: boolean;
+  isEditing: boolean;
+  selectionCount: number;
   hasChildren: boolean; // 是否有子块
   onUpdate: (id: string, content: string) => void;
   onDelete: (id: string) => void;
+  onDeleteSelection: () => void;
   onIndent: (id: string) => void;
   onOutdent: (id: string) => void;
-  onSelect: (id: string) => void;
+  onSelect: (
+    id: string,
+    action?: { mode?: 'replace' | 'range' | 'toggle'; edit?: boolean; caret?: number }
+  ) => void;
   onDeselect: (id: string) => void;
   onCreateBelow: (id: string) => void;
   onFocusPrevious: (id: string) => void;
   onFocusNext: (id: string) => void;
   onToggleCollapse: (id: string) => void;
   onLinkClick?: (title: string) => void;
+  onMouseSelectionStart?: (id: string, event?: React.MouseEvent) => void;
+  onMouseSelectionEnter?: (id: string) => void;
 }
 
 export const BlockEditor: React.FC<BlockEditorProps> = ({
   block,
+  pageDirectory,
   level,
   isSelected,
+  isEditing,
+  selectionCount,
   hasChildren,
   onUpdate,
   onDelete,
+  onDeleteSelection,
   onIndent,
   onOutdent,
   onSelect,
@@ -116,25 +141,93 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   onFocusNext,
   onToggleCollapse,
   onLinkClick,
+  onMouseSelectionStart,
+  onMouseSelectionEnter,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const displayContentRef = useRef<HTMLDivElement>(null);
   const pendingCursorRef = useRef<number | null>(null);
   const lastSelectionRef = useRef<number | null>(null);
+  const mouseDownPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const isTextareaMouseDownRef = useRef(false);
+  const hasStartedSelectionFromTextareaRef = useRef(false);
   const [content, setContent] = useState(block.content);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isHoveringBullet, setIsHoveringBullet] = useState(false);
+  const markdownComponents = useMemo<Components>(
+    () => ({
+      p: ({ children }) => (
+        <p className="m-0 whitespace-pre-wrap break-words leading-[1.5] text-[var(--color-text-primary)]">
+          {children}
+        </p>
+      ),
+      code({ inline, className, children, ...props }: MarkdownCodeProps) {
+        const childContent = Array.isArray(children) ? children.join('') : children ?? '';
+        const codeContent = String(childContent).replace(/\n$/, '');
+        const languageMatch = /language-([\w-]+)/.exec(className ?? '');
+        const language = languageMatch?.[1] ?? '';
+        const languageLabel = language ? language.toUpperCase() : 'PLAIN TEXT';
+
+        if (!inline) {
+          return (
+            <div className="my-2 w-full overflow-hidden rounded-md border border-[var(--color-code-border, var(--color-border-subtle))] bg-[var(--color-code-block-bg, #0f172a)]">
+              <div className="border-b border-[var(--color-code-border, var(--color-border-subtle))] bg-[var(--color-code-block-header-bg, rgba(15,23,42,0.85))] px-3 py-1 text-xs font-medium uppercase tracking-wide text-[var(--color-text-secondary)]">
+                {languageLabel}
+              </div>
+              <SyntaxHighlighter
+                PreTag="div"
+                language={language || undefined}
+                style={oneDark}
+                customStyle={{
+                  margin: 0,
+                  background: 'transparent',
+                  padding: '12px 16px',
+                }}
+                codeTagProps={{
+                  style: {
+                    fontFamily:
+                      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                    fontSize: '13px',
+                  },
+                }}
+              >
+                {codeContent}
+              </SyntaxHighlighter>
+            </div>
+          );
+        }
+
+        return (
+          <code
+            className="rounded bg-[var(--color-code-inline-bg, rgba(15,23,42,0.08))] px-1 py-0.5 text-sm font-mono text-[var(--color-code-inline-text, #0f172a)]"
+            {...props}
+          >
+            {children}
+          </code>
+        );
+      },
+      pre: ({ children }) => <>{children}</>,
+      ul: ({ children }) => (
+        <ul className="my-1 list-disc pl-5 text-[var(--color-text-primary)]">{children}</ul>
+      ),
+      ol: ({ children }) => (
+        <ol className="my-1 list-decimal pl-5 text-[var(--color-text-primary)]">{children}</ol>
+      ),
+      li: ({ children }) => <li className="whitespace-pre-wrap">{children}</li>,
+    }),
+    []
+  );
 
   // 只在 block 改变且不是当前选中的块时，才同步外部内容
   useEffect(() => {
-    if (!isSelected && block.content !== content) {
+    if (!isEditing && block.content !== content) {
       setContent(block.content);
     }
-  }, [block.content, isSelected, content]);
+  }, [block.content, isEditing, content]);
 
   useLayoutEffect(() => {
-    if (!isSelected || !textareaRef.current) {
+    if (!isEditing || !textareaRef.current) {
       return;
     }
 
@@ -160,7 +253,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     // 最后才是默认到末尾
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-  }, [isSelected]); // 只依赖 isSelected
+  }, [isEditing]); // 只依赖 isEditing
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -186,7 +279,37 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     };
   }, [isMenuOpen]);
 
+  useEffect(() => {
+    if (!isEditing) {
+      isTextareaMouseDownRef.current = false;
+      hasStartedSelectionFromTextareaRef.current = false;
+    }
+  }, [isEditing]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleWindowMouseUp = () => {
+      isTextareaMouseDownRef.current = false;
+      hasStartedSelectionFromTextareaRef.current = false;
+    };
+
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, []);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Delete/Backspace: 如果有多个块被选中，删除所有选中的块
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectionCount > 1 && isSelected) {
+      e.preventDefault();
+      onDeleteSelection();
+      return;
+    }
+
     // Escape: 退出编辑模式
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -268,7 +391,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   };
 
   const handleFocus = () => {
-    onSelect(block.id);
+    onSelect(block.id, { mode: 'replace', edit: true });
   };
   const handleBlur = () => {
     if (textareaRef.current) {
@@ -280,7 +403,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   };
 
   const parsedImage = parseMarkdownImage(content);
-  const showImagePreview = Boolean(parsedImage && !isSelected);
+  const resolvedImageUrl = useResolvedImageUrl(parsedImage?.url, pageDirectory);
+  const displayImageUrl = resolvedImageUrl ?? parsedImage?.url;
+  const showImagePreview = Boolean(parsedImage && !isEditing);
 
   const setMarkdownImage = (file: File, dataUrl: string) => {
     const baseName = file.name.replace(/\.[^/.]+$/, '').trim();
@@ -341,7 +466,11 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
   const handleDeleteConfirm = () => {
     setIsMenuOpen(false);
-    onDelete(block.id);
+    if (selectionCount > 1 && isSelected && !isEditing) {
+      onDeleteSelection();
+    } else {
+      onDelete(block.id);
+    }
   };
  
   const navigateToLinkAtCaret = () => {
@@ -370,6 +499,11 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   };
 
   const handleTextareaMouseUp = (event: React.MouseEvent<HTMLTextAreaElement>) => {
+    if (event.button === 0) {
+      isTextareaMouseDownRef.current = false;
+      hasStartedSelectionFromTextareaRef.current = false;
+    }
+
     if (event.button !== 0) {
       return;
     }
@@ -442,10 +576,22 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     pendingCursorRef.current = Math.max(0, Math.min(offset, block.content.length));
   };
 
+  const startSelectionFromTextareaDrag = () => {
+    if (hasStartedSelectionFromTextareaRef.current) {
+      return;
+    }
+    hasStartedSelectionFromTextareaRef.current = true;
+    onSelect(block.id, { mode: 'replace', edit: false });
+    onMouseSelectionStart?.(block.id);
+  };
+
   const handleDisplayMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
       return;
     }
+
+    // 记录鼠标按下的位置，用于检测是否发生了拖拽
+    mouseDownPositionRef.current = { x: event.clientX, y: event.clientY };
 
     const target = event.target as HTMLElement | null;
     if (target && target.closest('[data-wiki-link="true"]')) {
@@ -453,10 +599,31 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return;
     }
 
+    // 如果按住修饰键,不处理光标位置,让 onClick 处理选择逻辑
+    if (event.shiftKey || event.metaKey || event.ctrlKey) {
+      pendingCursorRef.current = null;
+      return;
+    }
+
+    // 如果当前块已选中且正在编辑,更新光标位置但不开始鼠标选择
+    if (isSelected && isEditing) {
+      updatePendingCursorFromPoint(event.clientX, event.clientY);
+      return;
+    }
+
+    // 对于未编辑的块（无论是否选中），都开始鼠标选择跟踪
+    onMouseSelectionStart?.(block.id, event);
+
+    // 准备进入编辑模式时的光标位置
     updatePendingCursorFromPoint(event.clientX, event.clientY);
   };
 
   const handleDisplayTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.metaKey || event.ctrlKey) {
+      pendingCursorRef.current = null;
+      return;
+    }
+
     const target = event.target as HTMLElement | null;
     if (target && target.closest('[data-wiki-link="true"]')) {
       pendingCursorRef.current = null;
@@ -471,12 +638,88 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     updatePendingCursorFromPoint(touch.clientX, touch.clientY);
   };
 
+  const handleTextareaMouseDown = (event: React.MouseEvent<HTMLTextAreaElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+    isTextareaMouseDownRef.current = true;
+    hasStartedSelectionFromTextareaRef.current = false;
+    mouseDownPositionRef.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handleTextareaMouseMove = (event: React.MouseEvent<HTMLTextAreaElement>) => {
+    if (
+      !isEditing ||
+      !isTextareaMouseDownRef.current ||
+      hasStartedSelectionFromTextareaRef.current ||
+      (event.buttons & 1) === 0 ||
+      event.shiftKey ||
+      event.metaKey ||
+      event.ctrlKey
+    ) {
+      return;
+    }
+
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    const rect = textarea.getBoundingClientRect();
+    const threshold = TEXTAREA_DRAG_THRESHOLD_PX;
+    const isOutsideVertical =
+      event.clientY < rect.top - threshold ||
+      event.clientY > rect.bottom + threshold;
+    const isOutsideHorizontal =
+      event.clientX < rect.left - threshold ||
+      event.clientX > rect.right + threshold;
+
+    if (!isOutsideVertical && !isOutsideHorizontal) {
+      return;
+    }
+
+    event.preventDefault();
+    startSelectionFromTextareaDrag();
+  };
+
+  const handleTextareaMouseLeave = (event: React.MouseEvent<HTMLTextAreaElement>) => {
+    if (
+      !isEditing ||
+      !isTextareaMouseDownRef.current ||
+      hasStartedSelectionFromTextareaRef.current ||
+      (event.buttons & 1) === 0 ||
+      event.shiftKey ||
+      event.metaKey ||
+      event.ctrlKey
+    ) {
+      return;
+    }
+    startSelectionFromTextareaDrag();
+  };
+
   const renderDisplayContent = (source: string): React.ReactNode => {
     const trimmed = source.trim();
     if (trimmed.length === 0) {
       // 返回一个零宽字符以保持布局，但不显示任何文字
       return <span className="opacity-0">&nbsp;</span>;
     }
+
+    const renderMarkdownSegment = (text: string, key: string) => {
+      if (text.length === 0) {
+        return null;
+      }
+
+      return (
+        <ReactMarkdown
+          key={key}
+          skipHtml
+          className="block-markdown"
+          components={markdownComponents}
+        >
+          {text}
+        </ReactMarkdown>
+      );
+    };
 
     const regex = /\[\[([^\]]+)\]\]/g;
     const elements: React.ReactNode[] = [];
@@ -487,11 +730,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       const matchIndex = match.index;
       const before = source.slice(lastIndex, matchIndex);
       if (before.length > 0) {
-        elements.push(
-          <span key={`text-${block.id}-${lastIndex}`} className="whitespace-pre-wrap break-words">
-            {before}
-          </span>
-        );
+        const markdownNode = renderMarkdownSegment(before, `text-${block.id}-${lastIndex}`);
+        if (markdownNode) {
+          elements.push(markdownNode);
+        }
       }
 
       const rawTitle = match[1];
@@ -521,25 +763,35 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     const after = source.slice(lastIndex);
     if (after.length > 0) {
-      elements.push(
-        <span key={`text-${block.id}-${lastIndex}-end`} className="whitespace-pre-wrap break-words">
-          {after}
-        </span>
-      );
+      const markdownNode = renderMarkdownSegment(after, `text-${block.id}-${lastIndex}-end`);
+      if (markdownNode) {
+        elements.push(markdownNode);
+      }
     }
 
     return elements;
   };
 
+  const containerClassName = [
+    'block-item flex items-start group min-h-[24px] w-full rounded-md transition-colors duration-150 border border-transparent bg-transparent',
+    isSelected
+      ? selectionCount > 1
+        ? 'border-blue-500/40 bg-blue-500/10 dark:border-blue-400/40 dark:bg-blue-500/15'
+        : 'border-blue-400/50 bg-blue-400/10 dark:border-blue-300/40 dark:bg-blue-400/15'
+      : ''
+  ].join(' ').trim();
+
   return (
     <div
       ref={containerRef}
-      className="block-item flex items-start group min-h-[24px] w-full"
+      data-block-container={block.id}
+      className={containerClassName}
       style={{
         paddingLeft: `${level * 24}px`,
         paddingTop: '2px',
         paddingBottom: '2px'
       }}
+      onMouseEnter={() => onMouseSelectionEnter?.(block.id)}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragEnterCapture={handleDragEnter}
@@ -573,6 +825,20 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           {/* 圆点按钮 - 始终显示 - 使用绝对定位固定在右侧 */}
           <button
             onContextMenu={handleMenuToggle}
+            onMouseDown={(event) => {
+              if (event.button !== 0) {
+                return;
+              }
+              onMouseSelectionStart?.(block.id, event);
+              event.preventDefault();
+              if (event.shiftKey) {
+                onSelect(block.id, { mode: 'range', edit: false });
+              } else if (event.metaKey || event.ctrlKey) {
+                onSelect(block.id, { mode: 'toggle', edit: false });
+              } else {
+                onSelect(block.id, { mode: 'replace', edit: false });
+              }
+            }}
             className="absolute left-[14px] w-[18px] h-[18px] flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded-sm transition-colors duration-100"
             title="右键更多操作"
           >
@@ -620,7 +886,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         {showImagePreview ? (
           <button
             type="button"
-            onClick={() => onSelect(block.id)}
+            onClick={() => onSelect(block.id, { mode: 'replace', edit: true })}
             className="w-full cursor-pointer rounded-sm py-0.5 px-1 transition-colors hover:bg-gray-50 focus:outline-none"
             title="点击查看图片地址"
             onDragEnter={handleDragEnter}
@@ -631,21 +897,91 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             onDropCapture={handleDrop}
           >
             <img
-              src={parsedImage?.url}
+              src={displayImageUrl || ''}
               alt={parsedImage?.alt}
               className="max-h-80 max-w-full rounded border border-[var(--color-border-subtle)] object-contain"
             />
           </button>
+        ) : parsedImage && !isEditing && resolvedImageUrl === null ? (
+          // 图片解析成功但加载失败，显示错误提示
+          <div className="relative">
+            <div
+              onClick={() => onSelect(block.id, { mode: 'replace', edit: true })}
+              className="w-full cursor-pointer rounded border border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-700 p-3 transition-colors hover:bg-red-100 dark:hover:bg-red-900/20"
+            >
+              <div className="flex items-start gap-2">
+                <span className="text-red-600 dark:text-red-400 text-sm">⚠️</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-300">图片文件未找到</p>
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1 break-all font-mono">{parsedImage.url}</p>
+                  <p className="text-xs text-red-500 dark:text-red-500 mt-1">点击编辑以更新图片路径</p>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="relative">
             <div
               ref={displayContentRef}
-              tabIndex={isSelected ? -1 : 0}
+              tabIndex={isEditing ? -1 : 0}
               role="button"
-              onClick={() => onSelect(block.id)}
+              onClick={(event) => {
+                // 检测是否发生了拖拽（鼠标移动超过5像素）
+                const mouseDownPos = mouseDownPositionRef.current;
+                const hasDragged = mouseDownPos && (
+                  Math.abs(event.clientX - mouseDownPos.x) > 5 ||
+                  Math.abs(event.clientY - mouseDownPos.y) > 5
+                );
+
+                // Shift 键：范围选择（不编辑）
+                if (event.shiftKey) {
+                  onSelect(block.id, { mode: 'range', edit: false });
+                  return;
+                }
+                // Cmd/Ctrl 键：切换选择（不编辑）
+                if (event.metaKey || event.ctrlKey) {
+                  onSelect(block.id, { mode: 'toggle', edit: false });
+                  return;
+                }
+                // 如果发生了拖拽，不做处理（选择已经在拖拽过程中更新）
+                if (hasDragged) {
+                  return;
+                }
+                // 如果有多个块被选中且当前块也被选中，点击进入编辑模式
+                if (selectionCount > 1 && isSelected) {
+                  const caret = pendingCursorRef.current;
+                  onSelect(block.id, { mode: 'replace', edit: true, caret: caret ?? undefined });
+                  return;
+                }
+                // 如果有多个块被选中但当前块未被选中，取消多选并选中当前块（不编辑）
+                if (selectionCount > 1 && !isSelected) {
+                  onSelect(block.id, { mode: 'replace', edit: false });
+                  return;
+                }
+                // 普通点击：如果已选中则进入编辑，否则仅选中
+                if (isSelected && !isEditing) {
+                  // 已选中，进入编辑模式
+                  const caret = pendingCursorRef.current;
+                  onSelect(block.id, { mode: 'replace', edit: true, caret: caret ?? undefined });
+                } else if (!isSelected) {
+                  // 未选中，仅选中不编辑
+                  onSelect(block.id, { mode: 'replace', edit: false });
+                }
+                // 如果已经在编辑，不做处理（保持编辑状态）
+              }}
+              onDoubleClick={(event) => {
+                // 双击：直接进入编辑模式
+                event.preventDefault();
+                if (!isEditing) {
+                  updatePendingCursorFromPoint(event.clientX, event.clientY);
+                  const caret = pendingCursorRef.current;
+                  onSelect(block.id, { mode: 'replace', edit: true, caret: caret ?? undefined });
+                }
+              }}
               onFocus={(event) => {
-                if (event.target === event.currentTarget) {
-                  onSelect(block.id);
+                if (event.target === event.currentTarget && !isSelected) {
+                  // 通过键盘聚焦时，仅选中不编辑
+                  onSelect(block.id, { mode: 'replace', edit: false });
                 }
               }}
               onMouseDown={handleDisplayMouseDown}
@@ -653,23 +989,32 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault();
-                  onSelect(block.id);
+                  onSelect(block.id, { mode: 'replace', edit: true });
+                  return;
+                }
+                if ((event.key === 'Backspace' || event.key === 'Delete') && isSelected && !isEditing) {
+                  event.preventDefault();
+                  if (selectionCount > 1) {
+                    onDeleteSelection();
+                  } else {
+                    onDelete(block.id);
+                  }
                 }
               }}
               className={`w-full cursor-text py-0.5 px-1 rounded-sm outline-none focus:ring-0 text-[var(--color-text-primary)] whitespace-pre-wrap break-words ${
-                isSelected ? 'pointer-events-none select-none' : ''
+                isEditing ? 'pointer-events-none select-none' : ''
               }`}
               style={{
                 lineHeight: '1.5',
                 wordBreak: 'break-word',
                 overflowWrap: 'anywhere',
-                visibility: isSelected ? 'hidden' : 'visible'
+                visibility: isEditing ? 'hidden' : 'visible'
               }}
-              aria-hidden={isSelected}
+              aria-hidden={isEditing}
             >
-              {renderDisplayContent(isSelected ? content : block.content)}
+              {renderDisplayContent(isEditing ? content : block.content)}
             </div>
-            {isSelected && (
+            {isEditing && (
               <textarea
                 ref={textareaRef}
                 data-block-textarea={block.id}
@@ -678,6 +1023,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 onCompositionStart={handleCompositionStart}
                 onCompositionEnd={handleCompositionEnd}
                 onKeyDown={handleKeyDown}
+                onMouseDown={handleTextareaMouseDown}
+              onMouseMove={handleTextareaMouseMove}
+                onMouseLeave={handleTextareaMouseLeave}
                 onMouseUp={handleTextareaMouseUp}
                 onTouchEnd={handleTextareaTouchEnd}
                 onFocus={handleFocus}
@@ -688,7 +1036,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 onDragOverCapture={handleDragOver}
                 onDrop={handleDrop}
                 onDropCapture={handleDrop}
-                autoFocus={isSelected}
+                autoFocus={isEditing}
                 className="absolute inset-0 w-full h-full resize-none border-none outline-none bg-transparent py-0.5 px-1 rounded-sm
                            focus:ring-0 focus:outline-none
                            text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] selection:bg-blue-200/50"

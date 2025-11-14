@@ -39,6 +39,11 @@
     --color-link-text: #2f80ed;
     --color-link-bg: rgba(47, 128, 237, 0.12);
     --color-link-hover-bg: rgba(47, 128, 237, 0.22);
+    --color-code-inline-bg: rgba(15, 23, 42, 0.08);
+    --color-code-inline-text: #0f172a;
+    --color-code-block-bg: #0f172a;
+    --color-code-block-header-bg: rgba(15, 23, 42, 0.85);
+    --color-code-border: rgba(15, 23, 42, 0.18);
   }
 
   .theme-things-light {
@@ -81,6 +86,11 @@
     --color-link-text: #9bc1ff;
     --color-link-bg: rgba(76, 141, 255, 0.2);
     --color-link-hover-bg: rgba(76, 141, 255, 0.32);
+    --color-code-inline-bg: rgba(148, 163, 184, 0.2);
+    --color-code-inline-text: #e2e8f0;
+    --color-code-block-bg: #0b1220;
+    --color-code-block-header-bg: rgba(15, 23, 42, 0.6);
+    --color-code-border: rgba(148, 163, 184, 0.35);
   }
 }
 
@@ -147,4 +157,26 @@ body {
 
 .arrow-fade-in {
   animation: fadeInArrow 150ms ease-out;
+}
+
+.block-markdown {
+  display: contents;
+  font-size: inherit;
+  color: inherit;
+}
+
+.block-markdown p {
+  margin: 0;
+  display: inline;
+  white-space: pre-wrap;
+}
+
+.block-markdown ul,
+.block-markdown ol {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+.block-markdown li {
+  margin: 0.15rem 0;
 }
